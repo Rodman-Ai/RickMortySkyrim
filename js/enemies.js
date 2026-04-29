@@ -6,32 +6,28 @@ import { sfx } from "./audio.js";
 
 let _id = 0;
 
+// Geometry segment counts boosted ~5x across all enemy meshes.
 function makeCronenberg() {
   const g = new THREE.Group();
-  // Goopy melted body — pinkish blob
-  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 1), new THREE.MeshLambertMaterial({ color: 0xc28b88, flatShading: true }));
+  const body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.9, 2), new THREE.MeshLambertMaterial({ color: 0xc28b88, flatShading: true }));
   body.position.y = 1.0;
-  // Distort vertices slightly
   const pos = body.geometry.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     pos.setXYZ(i, pos.getX(i) * (0.8 + Math.random() * 0.4), pos.getY(i) * (0.8 + Math.random() * 0.5), pos.getZ(i) * (0.8 + Math.random() * 0.4));
   }
   body.geometry.computeVertexNormals();
-  // A second smaller blob
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), new THREE.MeshLambertMaterial({ color: 0xa56b66 }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 18, 18), new THREE.MeshLambertMaterial({ color: 0xa56b66 }));
   head.position.set(0.4, 1.7, 0);
-  // Eye
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffaa }));
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 14), new THREE.MeshBasicMaterial({ color: 0xffffaa }));
   eye.position.set(0.55, 1.85, 0.4);
   g.add(body); g.add(head); g.add(eye);
   return g;
 }
 function makeTrooper() {
   const g = new THREE.Group();
-  // Federation trooper — black uniform, gold helm
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 1.5, 8), new THREE.MeshLambertMaterial({ color: 0x222233 }));
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 1.5, 18, 4), new THREE.MeshLambertMaterial({ color: 0x222233 }));
   body.position.y = 1.0;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), new THREE.MeshLambertMaterial({ color: 0xc89a3c }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 18), new THREE.MeshLambertMaterial({ color: 0xc89a3c }));
   head.position.y = 2.1;
   const visor = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.12), new THREE.MeshBasicMaterial({ color: 0x202020 }));
   visor.position.set(0, 2.15, 0.28);
@@ -42,20 +38,18 @@ function makeTrooper() {
 }
 function makeMeeseeks() {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.6, 8), new THREE.MeshLambertMaterial({ color: 0x4ec0e0 }));
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 1.6, 18, 4), new THREE.MeshLambertMaterial({ color: 0x4ec0e0 }));
   body.position.y = 1.0;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 10, 8), new THREE.MeshLambertMaterial({ color: 0x4ec0e0 }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.5, 24, 18), new THREE.MeshLambertMaterial({ color: 0x4ec0e0 }));
   head.position.y = 2.1;
-  // Crazy eyes
   for (const sgn of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 14), new THREE.MeshBasicMaterial({ color: 0xffffff }));
     e.position.set(0.18 * sgn, 2.2, 0.42);
     g.add(e);
-    const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    const p = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 14), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     p.position.set(0.18 * sgn, 2.2, 0.5);
     g.add(p);
   }
-  // Open mouth
   const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.05), new THREE.MeshBasicMaterial({ color: 0x111111 }));
   mouth.position.set(0, 1.95, 0.48);
   g.add(body); g.add(head); g.add(mouth);
@@ -63,12 +57,11 @@ function makeMeeseeks() {
 }
 function makeCromulon() {
   const g = new THREE.Group();
-  // Giant cosmic head
-  const head = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 18), new THREE.MeshLambertMaterial({ color: 0xddaa44, flatShading: true }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(7, 54, 40), new THREE.MeshLambertMaterial({ color: 0xddaa44, flatShading: true }));
   head.position.y = 7;
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const eye = new THREE.Mesh(new THREE.SphereGeometry(2.4, 36, 26), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   eye.position.set(0, 8, 6.2);
-  const pup = new THREE.Mesh(new THREE.SphereGeometry(1.0, 12, 10), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  const pup = new THREE.Mesh(new THREE.SphereGeometry(1.0, 28, 22), new THREE.MeshBasicMaterial({ color: 0x000000 }));
   pup.position.set(0, 8, 8.3);
   const mouth = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 0.4), new THREE.MeshBasicMaterial({ color: 0x331100 }));
   mouth.position.set(0, 4, 6.6);

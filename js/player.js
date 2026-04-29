@@ -9,33 +9,33 @@ const SPRINT_MULT = 1.7;
 const JUMP_VEL = 9;
 const GRAVITY = 24;
 
+// Polygon counts boosted ~5x on the viewmodel weapons.
 function buildPlumbusModel() {
   const g = new THREE.Group();
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 10), new THREE.MeshLambertMaterial({ color: 0x8a5a3a }));
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 22, 4), new THREE.MeshLambertMaterial({ color: 0x8a5a3a }));
   handle.position.set(0, -0.05, 0);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.18, 4, 8), new THREE.MeshLambertMaterial({ color: 0xc77f6c, flatShading: true }));
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.18, 8, 18), new THREE.MeshLambertMaterial({ color: 0xc77f6c, flatShading: true }));
   body.position.set(0, 0.18, 0);
-  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshLambertMaterial({ color: 0x9c5544 }));
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 22, 18), new THREE.MeshLambertMaterial({ color: 0x9c5544 }));
   knob.position.set(0, 0.35, 0);
-  // Hand stub
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 22, 18), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
   hand.position.set(0, -0.3, 0);
   g.add(handle); g.add(body); g.add(knob); g.add(hand);
   return g;
 }
 function buildPlasmaRifleModel() {
   const g = new THREE.Group();
-  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.5), new THREE.MeshLambertMaterial({ color: 0x444455 }));
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.5, 3, 3, 6), new THREE.MeshLambertMaterial({ color: 0x444455 }));
   stock.position.set(0, -0.05, -0.05);
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 10), new THREE.MeshLambertMaterial({ color: 0x666677 }));
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 22, 4), new THREE.MeshLambertMaterial({ color: 0x666677 }));
   barrel.rotation.x = Math.PI / 2;
   barrel.position.set(0.02, 0.0, 0.32);
-  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 10), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 22, 2), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
   tip.rotation.x = Math.PI / 2;
   tip.position.set(0.02, 0.0, 0.6);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1), new THREE.MeshLambertMaterial({ color: 0x222233 }));
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1, 3, 4, 3), new THREE.MeshLambertMaterial({ color: 0x222233 }));
   grip.position.set(0, -0.18, 0.05);
-  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 22, 18), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
   hand.position.set(0, -0.28, 0.05);
   g.add(stock); g.add(barrel); g.add(tip); g.add(grip); g.add(hand);
   return g;

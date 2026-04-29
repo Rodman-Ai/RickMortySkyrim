@@ -46,6 +46,12 @@ function makeNoise(seed) {
 
 const noise = makeNoise(13371337);
 
+// Smith Garage hub: completely flat in a 22-unit radius and smoothly blended out to 30.
+// This guarantees the doorway and floor align, and props placed via heightAt sit on a level plane.
+const SMITH_FLAT_R = 22;
+const SMITH_FLAT_BLEND = 30;
+const SMITH_FLAT_Y = 0;
+
 export function heightAt(x, z) {
   // Smooth rolling hills with zone bias.
   const n = noise(x * 0.012, z * 0.012);   // 0..1
@@ -56,6 +62,15 @@ export function heightAt(x, z) {
   // Birdperson peak: high
   const bd = Math.hypot(x + 210, z - 180);
   if (bd < 50) h += (1 - bd / 50) * 30;
+  // Smith Garage flat zone (with smooth blend so terrain isn't a cliff at the boundary)
+  const sg = Math.hypot(x, z);
+  if (sg <= SMITH_FLAT_R) return SMITH_FLAT_Y;
+  if (sg < SMITH_FLAT_BLEND) {
+    const t = (sg - SMITH_FLAT_R) / (SMITH_FLAT_BLEND - SMITH_FLAT_R);
+    // smoothstep
+    const k = t * t * (3 - 2 * t);
+    return SMITH_FLAT_Y * (1 - k) + h * k;
+  }
   return h;
 }
 
@@ -870,6 +885,154 @@ export class World {
       }
     }
 
+    // === Bicycle leaning against the east wall of the house ===
+    {
+      const bx = -10 + 4 + 0.3, bz = -8 + 1.5, by = 0;
+      const g = new THREE.Group();
+      const frameMat = new THREE.MeshLambertMaterial({ color: 0xc91d1d });
+      const tireMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+      const seatMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      // Two wheels
+      for (const tx of [-0.5, 0.5]) {
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.06, 8, 22), tireMat);
+        tire.rotation.y = Math.PI / 2;
+        tire.position.set(tx, 0.32, 0);
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.04, 14), new THREE.MeshLambertMaterial({ color: 0x888888 }));
+        rim.rotation.z = Math.PI / 2;
+        rim.position.set(tx, 0.32, 0);
+        g.add(tire); g.add(rim);
+      }
+      // Frame triangle
+      const t1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 6), frameMat);
+      t1.rotation.z = -0.6; t1.position.set(0, 0.55, 0);
+      const t2 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.6, 6), frameMat);
+      t2.rotation.z = 0.6; t2.position.set(0.2, 0.6, 0);
+      const t3 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.55, 6), frameMat);
+      t3.position.set(-0.18, 0.5, 0);
+      // Seat post + seat
+      const seatPost = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.4, 6), frameMat);
+      seatPost.position.set(-0.18, 0.85, 0);
+      const seat = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.04, 0.1), seatMat);
+      seat.position.set(-0.18, 1.05, 0);
+      // Handlebars
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 6), frameMat);
+      stem.position.set(0.5, 0.85, 0);
+      const bars = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.45, 6), seatMat);
+      bars.rotation.x = Math.PI / 2;
+      bars.position.set(0.5, 1.0, 0);
+      g.add(t1); g.add(t2); g.add(t3); g.add(seatPost); g.add(seat); g.add(stem); g.add(bars);
+      g.rotation.y = Math.PI / 2;          // align bike with the wall
+      g.rotation.z = -0.18;                 // lean against the house
+      g.position.set(bx, by, bz);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: bx, z: bz, hitR: 0.6 });
+    }
+
+    // === Coiled garden hose against west wall of house ===
+    {
+      const hx = -10 - 4 - 0.5, hz = -8 + 1.0, hy = 0;
+      const g = new THREE.Group();
+      const hoseMat = new THREE.MeshLambertMaterial({ color: 0x2a6a4a });
+      // Build a stack of horizontal torus rings to fake a coiled hose
+      for (let i = 0; i < 4; i++) {
+        const r = 0.45 - i * 0.04;
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 28), hoseMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.06 + i * 0.1;
+        g.add(ring);
+      }
+      // Spigot on the wall
+      const spigot = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.16, 8), new THREE.MeshLambertMaterial({ color: 0x999999 }));
+      spigot.rotation.x = Math.PI / 2;
+      spigot.position.set(0.0, 0.55, -0.3);
+      // Loose end snaking down to the coil
+      const looseEnd = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.4, 6), hoseMat);
+      looseEnd.position.set(0, 0.4, -0.18);
+      looseEnd.rotation.x = -0.7;
+      g.add(spigot); g.add(looseEnd);
+      g.position.set(hx, hy, hz);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: hx, z: hz, hitR: 0.5 });
+    }
+
+    // === Yard sign on a stake ===
+    {
+      const sx = 8, sz = 12, sy = 0;
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.4, 0.06), wood);
+      post.position.y = 0.7;
+      const tex = this._makeTextTexture("TRESPASSERS WILL\nBE CRONENBERGED", "#1a1410", "#d4c094");
+      const board = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.6), new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide }));
+      board.position.y = 1.2;
+      g.add(post); g.add(board);
+      g.rotation.y = -0.3;
+      g.position.set(sx, sy, sz);
+      this.scene.add(g);
+    }
+
+    // === Solar panels on garage roof ===
+    {
+      const grX = 8, grZ = -10;
+      const ROOF_Y = 3.6 + 0.4 + 0.05;
+      const panelMat = new THREE.MeshLambertMaterial({ color: 0x10283d });
+      const frameMat = new THREE.MeshLambertMaterial({ color: 0xbbbbbb });
+      // 2x3 array of panels
+      for (let i = 0; i < 2; i++) {
+        for (let j = 0; j < 3; j++) {
+          const px = grX - 2.4 + j * 2.0;
+          const pz = grZ - 1.6 + i * 1.6;
+          const panel = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.06, 1.4), panelMat);
+          panel.position.set(px, ROOF_Y + 0.18, pz);
+          panel.rotation.x = -0.18;
+          // Glossy grid lines on the panel surface
+          const grid = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 1.3), new THREE.MeshBasicMaterial({ color: 0x1f4a78, transparent: true, opacity: 0.6 }));
+          grid.position.set(px, ROOF_Y + 0.215, pz);
+          grid.rotation.x = -Math.PI / 2 - 0.18;
+          // Frame underneath as a small support
+          const support = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.2, 0.04), frameMat);
+          support.position.set(px - 0.8, ROOF_Y + 0.1, pz - 0.6);
+          this.scene.add(panel); this.scene.add(grid); this.scene.add(support);
+        }
+      }
+    }
+
+    // === Floating drone patrolling the yard (animated) ===
+    {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.22, 18, 14), new THREE.MeshLambertMaterial({ color: 0x444455 }));
+      body.position.y = 0;
+      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.08, 12, 10), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
+      eye.position.set(0, 0, 0.18);
+      // Four rotor arms with discs
+      const armMat = new THREE.MeshLambertMaterial({ color: 0x222233 });
+      const rotorMat = new THREE.MeshLambertMaterial({ color: 0x666666, transparent: true, opacity: 0.4 });
+      const rotors = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+        const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.32, 6), armMat);
+        arm.position.set(Math.cos(a) * 0.16, 0.04, Math.sin(a) * 0.16);
+        arm.rotation.z = Math.PI / 2;
+        arm.rotation.y = -a;
+        const rotor = new THREE.Mesh(new THREE.CircleGeometry(0.16, 18), rotorMat);
+        rotor.rotation.x = -Math.PI / 2;
+        rotor.position.set(Math.cos(a) * 0.32, 0.1, Math.sin(a) * 0.32);
+        rotors.add(arm); rotors.add(rotor);
+      }
+      const light = new THREE.PointLight(0x97ce4c, 0.8, 6, 2);
+      light.position.y = 0.2;
+      g.add(body); g.add(eye); g.add(rotors); g.add(light);
+      this.scene.add(g);
+      this._smithDrone = {
+        mesh: g, rotors, light, eye,
+        path: [{ x: -8, z: 12 }, { x: 8, z: 12 }, { x: 12, z: 0 }, { x: 0, z: -2 }, { x: -12, z: 0 }],
+        target: 1, speed: 3.0, t: 0,
+      };
+      // Initial position
+      const p0 = this._smithDrone.path[0];
+      g.position.set(p0.x, 3.2, p0.z);
+    }
+
     // === Ambient characters from the show ===
     this._buildAmbientCharacters();
 
@@ -1153,6 +1316,49 @@ export class World {
       this.props.push({ mesh: g, type: "smith", x: g.position.x, z: g.position.z, hitR: 1.3 });
     }
 
+    // === Coat rack with hanging coats inside the front door ===
+    {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0x4f3a2c });
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.7, 14, 4), wood);
+      pole.position.y = 0.85;
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.06, 18), wood);
+      base.position.y = 0.03;
+      // Top crown with hooks
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(0.08, 14, 10), wood);
+      crown.position.y = 1.7;
+      // Four hooks
+      const hookMat = new THREE.MeshLambertMaterial({ color: 0x8a6a45 });
+      const coatColors = [0x2b4a8a, 0x9c1f1f, 0x4ec0e0, 0x2a6a4a];
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        const hook = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.012, 6, 12, Math.PI), hookMat);
+        hook.position.set(Math.cos(a) * 0.1, 1.55, Math.sin(a) * 0.1);
+        hook.rotation.set(0, -a, Math.PI / 2);
+        g.add(hook);
+        // Coat hanging from the hook
+        const coat = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.7, 0.16), new THREE.MeshLambertMaterial({ color: coatColors[i] }));
+        coat.position.set(Math.cos(a) * 0.18, 1.18, Math.sin(a) * 0.18);
+        coat.rotation.y = -a + Math.PI / 2;
+        g.add(coat);
+      }
+      g.add(pole); g.add(base); g.add(crown);
+      // Just inside the front door, west of doorway
+      g.position.set(cx - 1.6, cy + 0.05, cz + d / 2 - 0.4);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: g.position.x, z: g.position.z, hitR: 0.45 });
+    }
+
+    // === Spider web in the SE ceiling corner of the house ===
+    {
+      const webMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, side: THREE.DoubleSide });
+      const web = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), webMat);
+      // Diagonal in the corner
+      web.position.set(cx + w / 2 - 0.45, cy + 3.0, cz + d / 2 - 0.45);
+      web.lookAt(cx, cy + 2.8, cz);
+      this.scene.add(web);
+    }
+
     // === Pizza boxes stacked on the coffee table ===
     {
       const ctableX = cx + 0.4, ctableZ = cz, ctableTop = cy + 0.06 + 0.5 + 0.04;
@@ -1292,6 +1498,84 @@ export class World {
       this._smithBeakers.bubblePool = [];
     }
 
+    // === Workshop bench vise on the workbench ===
+    {
+      const g = new THREE.Group();
+      const cast = new THREE.MeshLambertMaterial({ color: 0x4a4a55 });
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 0.08, 18), cast);
+      base.position.y = 0.04;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.12), cast);
+      post.position.y = 0.16;
+      // Fixed jaw
+      const jawF = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.04), cast);
+      jawF.position.set(0, 0.27, 0.08);
+      // Sliding jaw + screw
+      const jawS = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.04), cast);
+      jawS.position.set(0, 0.27, -0.04);
+      const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.4, 12), new THREE.MeshLambertMaterial({ color: 0x999999 }));
+      screw.rotation.x = Math.PI / 2;
+      screw.position.set(0, 0.27, -0.18);
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.32, 8), new THREE.MeshLambertMaterial({ color: 0xc91d1d }));
+      handle.position.set(0, 0.27, -0.42);
+      g.add(base); g.add(post); g.add(jawF); g.add(jawS); g.add(screw); g.add(handle);
+      // Mount on the workbench top (back-right edge)
+      g.position.set(cx + 1.6, cy + 0.05 + 1.0, cz - d / 2 + 0.7);
+      g.rotation.y = Math.PI;
+      this.scene.add(g);
+    }
+
+    // === Welder's mask hanging on the east wall ===
+    {
+      const g = new THREE.Group();
+      const shellMat = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const lensMat = new THREE.MeshBasicMaterial({ color: 0x335533 });
+      const shell = new THREE.Mesh(new THREE.SphereGeometry(0.32, 18, 14, 0, Math.PI * 2, 0, Math.PI / 2), shellMat);
+      shell.rotation.x = Math.PI / 2;
+      const front = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.45, 0.05), shellMat);
+      front.position.set(0, 0, 0.24);
+      const lens = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.06), lensMat);
+      lens.position.set(0, 0.05, 0.27);
+      // Headband strap
+      const strap = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.04, 0.02), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      strap.position.set(0, 0.18, -0.05);
+      // Hook nail
+      const nail = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.06, 6), new THREE.MeshLambertMaterial({ color: 0x555555 }));
+      nail.rotation.x = Math.PI / 2;
+      nail.position.set(0, 0.32, -0.06);
+      g.add(shell); g.add(front); g.add(lens); g.add(strap); g.add(nail);
+      g.position.set(cx + w / 2 - 0.12, cy + 1.9, cz + 1.4);
+      g.rotation.y = -Math.PI / 2;
+      this.scene.add(g);
+    }
+
+    // === Spider web in the NE ceiling corner of the garage ===
+    {
+      const webMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+      const web = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 1.2), webMat);
+      web.position.set(cx + w / 2 - 0.6, cy + 3.4, cz - d / 2 + 0.6);
+      web.lookAt(cx, cy + 3.2, cz);
+      this.scene.add(web);
+    }
+
+    // === Stacked spare tires in the SW corner of the garage ===
+    {
+      const tx = cx - w / 2 + 0.7, tz = cz + d / 2 - 1.2;
+      const tireMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+      const rimMat = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      const stack = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.1, 14, 28), tireMat);
+        tire.rotation.x = Math.PI / 2;
+        tire.position.y = 0.1 + i * 0.22;
+        const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.18, 18), rimMat);
+        rim.position.y = 0.1 + i * 0.22;
+        stack.add(tire); stack.add(rim);
+      }
+      stack.position.set(tx, cy + 0.05, tz);
+      this.scene.add(stack);
+      this.props.push({ mesh: stack, type: "smith", x: tx, z: tz, hitR: 0.5 });
+    }
+
     // === Hanging fluorescent tube lights ===
     {
       const tubeMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.95 });
@@ -1426,24 +1710,23 @@ export class World {
       this._ambient.push({ mesh: s, type: "walk", path, target: 1, speed: 1.6, walkPhase: 0 });
     }
 
-    // Squanchy — the cat, sleeping on the rug inside the house
+    // Squanchy — the cat, sleeping on the rug. Polygons boosted ~5x.
     {
       const g = new THREE.Group();
       const fur = new THREE.MeshLambertMaterial({ color: 0x998866 });
       const stripe = new THREE.MeshLambertMaterial({ color: 0x665544 });
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), fur);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 28, 18), fur);
       body.scale.set(1.6, 0.7, 0.9);
       body.position.y = 0.18;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), fur);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 22, 18), fur);
       head.position.set(0.4, 0.22, 0);
-      const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 6), fur);
+      const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 14), fur);
       ear1.position.set(0.45, 0.4, 0.1);
       const ear2 = ear1.clone(); ear2.position.z = -0.1;
-      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.5, 8), stripe);
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.5, 18, 4), stripe);
       tail.rotation.z = -Math.PI / 3; tail.position.set(-0.45, 0.25, 0);
-      // Two black eye dots
       for (const sz of [-0.06, 0.06]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 14, 14), new THREE.MeshBasicMaterial({ color: 0x000000 }));
         eye.position.set(0.52, 0.24, sz);
         g.add(eye);
       }
@@ -1456,21 +1739,20 @@ export class World {
       this._ambient.push({ mesh: g, type: "sleep", phase: Math.random() * 5 });
     }
 
-    // Snuffles — the dog, patrolling the yard
+    // Snuffles — the dog, patrolling the yard. Boxes upgraded with segment counts (~5x triangles).
     {
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35, 5, 4, 4), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       body.position.y = 0.3;
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3, 4, 4, 4), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       head.position.set(0.4, 0.45, 0);
-      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.1), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.1, 2, 4, 2), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
       ear1.position.set(0.42, 0.65, 0.12);
       const ear2 = ear1.clone(); ear2.position.z = -0.12;
-      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06, 6, 2, 2), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       tail.position.set(-0.45, 0.45, 0); tail.rotation.z = 0.4;
-      // 4 legs (very small)
       for (const [px, pz] of [[0.25, 0.13], [0.25, -0.13], [-0.25, 0.13], [-0.25, -0.13]]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08, 2, 4, 2), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
         leg.position.set(px, 0.13, pz);
         g.add(leg);
       }
@@ -1485,15 +1767,16 @@ export class World {
   }
 
   _makeHumanoid({ shirt = 0x888888, hair = 0x553322, skin = 0xfdd6b5 } = {}) {
+    // Polygon counts boosted ~5x.
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 8), new THREE.MeshLambertMaterial({ color: shirt }));
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 18, 4), new THREE.MeshLambertMaterial({ color: shirt }));
     body.position.y = 0.7;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshLambertMaterial({ color: skin }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 28, 22), new THREE.MeshLambertMaterial({ color: skin }));
     head.position.y = 1.7;
-    const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: hair }));
+    const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: hair }));
     hairMesh.position.y = 1.75;
     for (const sx of [-0.12, 0.12]) {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 14), new THREE.MeshBasicMaterial({ color: 0x111111 }));
       e.position.set(sx, 1.75, 0.3);
       g.add(e);
     }
@@ -1664,6 +1947,28 @@ export class World {
     // Ceiling fan rotation
     if (this._smithFan) {
       this._smithFan.rotor.rotation.y += dt * 4.0;
+    }
+
+    // Patrol drone — fly along path with rotor spin and gentle bobbing
+    if (this._smithDrone) {
+      const dr = this._smithDrone;
+      const tgt = dr.path[dr.target];
+      const dx = tgt.x - dr.mesh.position.x, dz = tgt.z - dr.mesh.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < 0.4) {
+        dr.target = (dr.target + 1) % dr.path.length;
+      } else {
+        const nx = dx / dist, nz = dz / dist;
+        dr.mesh.position.x += nx * dr.speed * dt;
+        dr.mesh.position.z += nz * dr.speed * dt;
+        dr.mesh.rotation.y = Math.atan2(nx, nz);
+      }
+      dr.t += dt;
+      dr.mesh.position.y = 3.0 + Math.sin(dr.t * 2) * 0.25;
+      dr.rotors.rotation.y += dt * 18;
+      // Eye blink-pulse
+      const k = 0.6 + 0.4 * Math.sin(dr.t * 3);
+      dr.eye.material.color.setRGB(0.3 * k, 1.0 * k, 0.5 * k);
     }
 
     // Beaker bubbles — rise from each beaker's liquid surface

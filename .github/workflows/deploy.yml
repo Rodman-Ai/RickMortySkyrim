@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/rick-morty-skyrim-game-mEDio
   workflow_dispatch:
 
 permissions:

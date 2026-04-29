@@ -371,6 +371,7 @@ document.getElementById("cfg-invert").addEventListener("change", (e) => game.inp
 
 // Mobile menu button handled via [data-act="menu"]? — explicit
 document.getElementById("mobile-menu").addEventListener("click", () => game.ui.toggleMenu());
+document.getElementById("menu-close").addEventListener("click", () => game.ui.toggleMenu());
 
 // Show title screen after a brief loading sim. ES modules run after
 // DOMContentLoaded, so we kick this off immediately. Bail if a global

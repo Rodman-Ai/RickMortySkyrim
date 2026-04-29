@@ -80,6 +80,19 @@ canvas#game { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; dis
   box-shadow: 0 0 40px rgba(0, 182, 125, 0.15);
 }
 .panel.wide { max-width: 900px; }
+#menu-close {
+  position: absolute; top: 10px; right: 10px;
+  width: 44px; height: 44px;
+  background: rgba(255,85,119,0.15);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  font-size: 20px; font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  z-index: 10;
+}
+#menu-close:hover { background: rgba(255,85,119,0.3); }
+.panel { position: relative; }
 .panel h2 { color: var(--portal-glow); margin-top: 0; }
 .panel button {
   background: rgba(255,255,255,0.05);

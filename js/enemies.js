@@ -1,6 +1,7 @@
 // Enemy AI: Cronenberg (melee), Federation Trooper (ranged), Cromulon (boss).
 import * as THREE from "three";
-import { heightAt, ZONES } from "./world.js";
+import { heightAt } from "./world.js";
+import { ZONES } from "./data.js";
 import { sfx } from "./audio.js";
 
 let _id = 0;

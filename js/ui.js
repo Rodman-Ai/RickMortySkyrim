@@ -162,6 +162,9 @@ export class UI {
     if (npc) {
       this.interactHint.textContent = `[E] Talk to ${npc.name}`;
       this.interactHint.classList.remove("hidden");
+    } else if (world._containers && world._containers.find((c) => !c.opened && Math.hypot(c.x - player.pos.x, c.z - player.pos.z) < 1.6)) {
+      this.interactHint.textContent = "[E] Open container";
+      this.interactHint.classList.remove("hidden");
     } else if (world.lostPlumbus && !world.lostPlumbus.taken) {
       const lp = world.lostPlumbus;
       const d = Math.hypot(player.pos.x - lp.x, player.pos.z - lp.z);

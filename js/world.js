@@ -273,91 +273,173 @@ export class World {
   }
 
   _buildSmithGarage() {
-    // Hub layout around origin. Storage for night-animations:
-    this._smithWindows = [];   // {mat, base} — emissive ramps with night
-    this._smithLamps = [];     // {light, lampMat}
-    this._smithStringLights = []; // {mat}
+    this._smithWindows = [];
+    this._smithLamps = [];
+    this._smithStringLights = [];
     this._smithSmoke = { x: 0, y: 0, z: 0, t: 0, list: [] };
+    this._smithDoor = null;       // {group, hinge, openTarget, current, x, z}
+    this._smithTV = null;          // {mat, baseColor}
+    this._ambient = [];            // walking/sitting characters
+    this._containers = [];         // {x, z, mesh, lid, loot, opened}
 
     const addProp = (mesh, x, z, hitR) => {
       this.scene.add(mesh);
       this.props.push({ mesh, type: "smith", hitR: hitR ?? 0.6, x, z });
     };
+    // AABB wall: thin box collider aligned to world axes
+    const addWall = (cx, cz, sx, sz, mesh) => {
+      this.scene.add(mesh);
+      this.props.push({
+        mesh, type: "wall", x: cx, z: cz, hitR: 0,
+        hitAABB: { minX: cx - sx / 2, maxX: cx + sx / 2, minZ: cz - sz / 2, maxZ: cz + sz / 2 },
+      });
+    };
 
-    // === House (2-story Smith family home, back-left of origin) ===
+    // === House (hollow, enterable, with interior dressing) ===
+    // Footprint: 8 wide (X) x 7 deep (Z), centered at (-10, -8). Front door on +Z face.
     const houseX = -10, houseZ = -8, houseY = heightAt(houseX, houseZ);
+    const HW = 8, HD = 7, GH = 3.2, T = 0.2;   // GH = ground-floor inner height
+    const houseFloorY = houseY;
+    const houseCeilingY = houseY + GH;
     {
-      const g = new THREE.Group();
       const wallMat = new THREE.MeshLambertMaterial({ color: 0xd1c1a0, flatShading: true });
+      const innerMat = new THREE.MeshLambertMaterial({ color: 0xe8d5b0 });
       const trimMat = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
       const roofMat = new THREE.MeshLambertMaterial({ color: 0x5a2a2a, flatShading: true });
-      const ground = new THREE.Mesh(new THREE.BoxGeometry(8, 3.2, 7), wallMat);
-      ground.position.y = 1.6;
-      const upper = new THREE.Mesh(new THREE.BoxGeometry(8, 2.6, 7), wallMat);
-      upper.position.y = 4.5;
+      const floorMat = new THREE.MeshLambertMaterial({ color: 0x7a5a3a });
+
+      // Floor
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(HW, 0.1, HD), floorMat);
+      floor.position.set(houseX, houseFloorY + 0.05, houseZ);
+      this.scene.add(floor);
+
+      // Ceiling (interior)
+      const ceil = new THREE.Mesh(new THREE.BoxGeometry(HW, 0.1, HD), innerMat);
+      ceil.position.set(houseX, houseCeilingY, houseZ);
+      this.scene.add(ceil);
+
+      // Outer walls — split front wall around door cutout (1.6 wide centered)
+      // North (back) wall:
+      let m = new THREE.Mesh(new THREE.BoxGeometry(HW, GH, T), wallMat);
+      m.position.set(houseX, houseFloorY + GH / 2, houseZ - HD / 2);
+      addWall(houseX, houseZ - HD / 2, HW, T, m);
+      // West wall:
+      m = new THREE.Mesh(new THREE.BoxGeometry(T, GH, HD), wallMat);
+      m.position.set(houseX - HW / 2, houseFloorY + GH / 2, houseZ);
+      addWall(houseX - HW / 2, houseZ, T, HD, m);
+      // East wall:
+      m = new THREE.Mesh(new THREE.BoxGeometry(T, GH, HD), wallMat);
+      m.position.set(houseX + HW / 2, houseFloorY + GH / 2, houseZ);
+      addWall(houseX + HW / 2, houseZ, T, HD, m);
+      // South wall — split into left + right of doorway (door 1.6 wide)
+      const doorW = 1.6, doorH = 2.4;
+      const sideW = (HW - doorW) / 2;
+      m = new THREE.Mesh(new THREE.BoxGeometry(sideW, GH, T), wallMat);
+      m.position.set(houseX - (doorW / 2 + sideW / 2), houseFloorY + GH / 2, houseZ + HD / 2);
+      addWall(houseX - (doorW / 2 + sideW / 2), houseZ + HD / 2, sideW, T, m);
+      m = new THREE.Mesh(new THREE.BoxGeometry(sideW, GH, T), wallMat);
+      m.position.set(houseX + (doorW / 2 + sideW / 2), houseFloorY + GH / 2, houseZ + HD / 2);
+      addWall(houseX + (doorW / 2 + sideW / 2), houseZ + HD / 2, sideW, T, m);
+      // Lintel above door
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(doorW, GH - doorH, T), wallMat);
+      lintel.position.set(houseX, houseFloorY + doorH + (GH - doorH) / 2, houseZ + HD / 2);
+      this.scene.add(lintel);
+
+      // Upper floor (decorative — not enterable) and roof
+      const upper = new THREE.Mesh(new THREE.BoxGeometry(HW, 2.6, HD), wallMat);
+      upper.position.set(houseX, houseCeilingY + 1.4, houseZ);
+      this.scene.add(upper);
       const roof = new THREE.Mesh(new THREE.ConeGeometry(6.5, 2.4, 4), roofMat);
-      roof.position.y = 7.0; roof.rotation.y = Math.PI / 4;
-      const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.1), trimMat);
-      door.position.set(0, 1.1, 3.55);
-      // Windows — 4 panels with emissive material so they glow at night
+      roof.position.set(houseX, houseCeilingY + 3.7, houseZ); roof.rotation.y = Math.PI / 4;
+      this.scene.add(roof);
+
+      // Front door (animated swing). Modelled as a hinge group at left jamb.
+      const hinge = new THREE.Group();
+      hinge.position.set(houseX - doorW / 2, houseFloorY, houseZ + HD / 2 + T / 2);
+      const doorMesh = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 0.08), trimMat);
+      doorMesh.position.set(doorW / 2, doorH / 2, 0);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 8), new THREE.MeshLambertMaterial({ color: 0xffd166 }));
+      knob.position.set(doorW - 0.18, doorH / 2 - 0.1, 0.07);
+      hinge.add(doorMesh); hinge.add(knob);
+      this.scene.add(hinge);
+      this._smithDoor = { hinge, current: 0, target: 0, x: houseX, z: houseZ + HD / 2 };
+
+      // Windows (upper-floor — emissive at night)
       const winMat = new THREE.MeshLambertMaterial({ color: 0x88a4b4, emissive: 0xffd166, emissiveIntensity: 0 });
       this._smithWindows.push({ mat: winMat });
       const winSpec = [
-        [-2.4, 1.7, 3.55, 1.4, 1.0],
-        [ 2.4, 1.7, 3.55, 1.4, 1.0],
-        [-2.4, 4.7, 3.55, 1.4, 1.0],
-        [ 2.4, 4.7, 3.55, 1.4, 1.0],
+        [-2.4, houseCeilingY + 1.5, HD / 2 + 0.05, 1.4, 1.0],
+        [ 2.4, houseCeilingY + 1.5, HD / 2 + 0.05, 1.4, 1.0],
       ];
       for (const [x, y, z, w, h] of winSpec) {
         const pane = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), winMat);
-        pane.position.set(x, y, z);
-        g.add(pane);
+        pane.position.set(houseX + x, y, houseZ + z);
+        this.scene.add(pane);
       }
-      // Chimney
+      // Chimney + antenna
       const chim = new THREE.Mesh(new THREE.BoxGeometry(0.8, 2.2, 0.8), trimMat);
-      chim.position.set(2.5, 7.0, -1.5);
-      // Antenna
+      chim.position.set(houseX + 2.5, houseCeilingY + 3.7, houseZ - 1.5);
+      this.scene.add(chim);
       const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.4, 6), trimMat);
-      ant.position.set(-2.4, 8.2, 0); ant.rotation.z = 0.2;
+      ant.position.set(houseX - 2.4, houseCeilingY + 4.9, houseZ); ant.rotation.z = 0.2;
+      this.scene.add(ant);
 
-      g.add(ground); g.add(upper); g.add(roof); g.add(door); g.add(chim); g.add(ant);
-      g.position.set(houseX, houseY, houseZ);
-      addProp(g, houseX, houseZ, 5);
       this._smithSmoke.x = houseX + 2.5;
-      this._smithSmoke.y = houseY + 8.2;
+      this._smithSmoke.y = houseCeilingY + 4.9;
       this._smithSmoke.z = houseZ - 1.5;
+
+      // === Interior dressing ===
+      this._buildHouseInterior(houseX, houseFloorY, houseZ, HW, HD);
     }
 
-    // === Garage / Lab (back-right) ===
+    // === Garage / Lab (hollow, open front) ===
     const gX = 8, gZ = -10, gY = heightAt(gX, gZ);
+    const GW = 8, GD = 7, GGH = 3.6;
     {
-      const g = new THREE.Group();
       const wallMat = new THREE.MeshLambertMaterial({ color: 0xa3a1a0 });
+      const innerMat = new THREE.MeshLambertMaterial({ color: 0x9a9a9a });
       const roofMat = new THREE.MeshLambertMaterial({ color: 0x444444 });
-      const body = new THREE.Mesh(new THREE.BoxGeometry(8, 4, 7), wallMat);
-      body.position.y = 2;
-      const roof = new THREE.Mesh(new THREE.BoxGeometry(8.4, 0.4, 7.4), roofMat);
-      roof.position.y = 4.2;
-      // Glowing roll-up door — emissive, looks like the lab is open
-      const doorMat = new THREE.MeshLambertMaterial({ color: 0x97ce4c, emissive: 0x97ce4c, emissiveIntensity: 0.6 });
-      const door = new THREE.Mesh(new THREE.PlaneGeometry(4.5, 3), doorMat);
-      door.position.set(0, 1.7, 3.51);
-      // Vertical lines on the door (rolling-shutter look)
-      for (let i = -1.8; i <= 1.8; i += 0.6) {
-        const line = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 2.9), new THREE.MeshBasicMaterial({ color: 0x224422 }));
-        line.position.set(i, 1.7, 3.52);
-        g.add(line);
-      }
-      // Sat dish
+      const floorMat = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+
+      // Concrete floor
+      const floor = new THREE.Mesh(new THREE.BoxGeometry(GW, 0.1, GD), floorMat);
+      floor.position.set(gX, gY + 0.05, gZ);
+      this.scene.add(floor);
+
+      // Roof
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(GW + 0.4, 0.4, GD + 0.4), roofMat);
+      roof.position.set(gX, gY + GGH + 0.2, gZ);
+      this.scene.add(roof);
+
+      // Three solid walls (back / east / west). Front is open.
+      let m = new THREE.Mesh(new THREE.BoxGeometry(GW, GGH, T), wallMat);
+      m.position.set(gX, gY + GGH / 2, gZ - GD / 2);
+      addWall(gX, gZ - GD / 2, GW, T, m);
+      m = new THREE.Mesh(new THREE.BoxGeometry(T, GGH, GD), wallMat);
+      m.position.set(gX - GW / 2, gY + GGH / 2, gZ);
+      addWall(gX - GW / 2, gZ, T, GD, m);
+      m = new THREE.Mesh(new THREE.BoxGeometry(T, GGH, GD), wallMat);
+      m.position.set(gX + GW / 2, gY + GGH / 2, gZ);
+      addWall(gX + GW / 2, gZ, T, GD, m);
+
+      // Front lintel (small overhang above the open front, for visual)
+      const lintel = new THREE.Mesh(new THREE.BoxGeometry(GW, 0.3, T), wallMat);
+      lintel.position.set(gX, gY + GGH - 0.15, gZ + GD / 2);
+      this.scene.add(lintel);
+
+      // Sat dish on roof
       const dishGeo = new THREE.SphereGeometry(0.7, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2);
       const dish = new THREE.Mesh(dishGeo, new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
-      dish.position.set(2.6, 4.6, -1); dish.rotation.x = Math.PI;
-      // Rooftop point light bleeding out from interior
-      const interior = new THREE.PointLight(0x97ce4c, 0.8, 12, 2);
-      interior.position.set(0, 1.7, 1);
-      g.add(body); g.add(roof); g.add(door); g.add(dish); g.add(interior);
-      g.position.set(gX, gY, gZ);
-      addProp(g, gX, gZ, 5);
+      dish.position.set(gX + 2.6, gY + GGH + 1.0, gZ - 1); dish.rotation.x = Math.PI;
+      this.scene.add(dish);
+
+      // Bright green interior point light (visible through open front, lights interior props)
+      const interior = new THREE.PointLight(0x97ce4c, 1.4, 16, 2);
+      interior.position.set(gX, gY + GGH - 0.4, gZ);
+      this.scene.add(interior);
+
+      // === Interior dressing ===
+      this._buildGarageInterior(gX, gY, gZ, GW, GD);
     }
 
     // === Rick's UFO spaceship (parked in front yard) ===
@@ -509,6 +591,9 @@ export class World {
       addProp(g, mx, mz, 0.5);
     }
 
+    // === Ambient characters from the show ===
+    this._buildAmbientCharacters();
+
     // === Cobblestone-like darker disk path under the hub (visual only) ===
     {
       const ringGeo = new THREE.RingGeometry(0, 14, 32);
@@ -518,6 +603,348 @@ export class World {
       ring.position.set(0, heightAt(0, 0) + 0.05, 0);
       this.scene.add(ring);
     }
+  }
+
+  _buildHouseInterior(cx, cy, cz, w, d) {
+    // Coordinates inside the house, given center (cx,cy,cz)
+    const wallMat = new THREE.MeshLambertMaterial({ color: 0x88a4b4 });
+    // Rug in center
+    const rug = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 2), new THREE.MeshLambertMaterial({ color: 0x4f3a2c }));
+    rug.rotation.x = -Math.PI / 2;
+    rug.position.set(cx, cy + 0.06, cz);
+    this.scene.add(rug);
+
+    // Couch — back against west wall, length along Z
+    {
+      const g = new THREE.Group();
+      const fab = new THREE.MeshLambertMaterial({ color: 0x36506e });
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 2.6), fab);
+      base.position.set(0, 0.25, 0);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.9, 2.6), fab);
+      back.position.set(-0.3, 0.7, 0);
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.7, 0.25), fab);
+      armL.position.set(0, 0.5, 1.3);
+      const armR = armL.clone(); armR.position.z = -1.3;
+      g.add(base); g.add(back); g.add(armL); g.add(armR);
+      g.position.set(cx - w / 2 + 0.7, cy + 0.1, cz);
+      this.scene.add(g);
+      this._couchPos = { x: g.position.x, y: g.position.y, z: g.position.z };
+    }
+
+    // Coffee table on rug
+    {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.9), wood);
+      top.position.y = 0.5;
+      for (const [px, pz] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.5, 0.08), wood);
+        leg.position.set(px, 0.25, pz);
+        g.add(leg);
+      }
+      g.add(top);
+      g.position.set(cx + 0.4, cy + 0.06, cz);
+      this.scene.add(g);
+      // beer cans on the table
+      for (let i = 0; i < 3; i++) {
+        const can = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.22, 10), new THREE.MeshLambertMaterial({ color: i % 2 ? 0xc4a017 : 0xc91d1d }));
+        can.position.set(cx + 0.4 + (i - 1) * 0.4, cy + 0.6 + 0.11, cz - 0.3 + Math.random() * 0.2);
+        this.scene.add(can);
+      }
+      // a magazine
+      const mag = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.02, 0.35), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+      mag.position.set(cx + 0.4, cy + 0.6 + 0.02, cz + 0.25);
+      mag.rotation.y = 0.4;
+      this.scene.add(mag);
+    }
+
+    // TV on stand (against east wall, facing west)
+    {
+      const g = new THREE.Group();
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1.6), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      stand.position.y = 0.25;
+      const tvBody = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.85, 1.5), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      tvBody.position.set(0.0, 0.95, 0);
+      const screenMat = new THREE.MeshBasicMaterial({ color: 0x55c5e5 });
+      const screen = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.7, 1.3), screenMat);
+      screen.position.set(-0.07, 0.95, 0);
+      g.add(stand); g.add(tvBody); g.add(screen);
+      g.position.set(cx + w / 2 - 0.4, cy + 0.1, cz);
+      this.scene.add(g);
+      this._smithTV = { mat: screenMat, baseColor: 0x55c5e5 };
+    }
+
+    // Fridge in NW corner
+    {
+      const fridge = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.8, 0.8), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+      fridge.position.set(cx - w / 2 + 0.55, cy + 0.95, cz - d / 2 + 0.5);
+      this.scene.add(fridge);
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.6, 0.7), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
+      door.position.set(cx - w / 2 + 0.55 + 0.45, cy + 0.95, cz - d / 2 + 0.5);
+      this.scene.add(door);
+    }
+
+    // Stove next to fridge
+    {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.0, 0.7), new THREE.MeshLambertMaterial({ color: 0x888888 }));
+      body.position.y = 0.5;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.05, 0.72), new THREE.MeshBasicMaterial({ color: 0x222222 }));
+      top.position.y = 1.02;
+      g.add(body); g.add(top);
+      g.position.set(cx - w / 2 + 1.55, cy + 0.05, cz - d / 2 + 0.5);
+      this.scene.add(g);
+    }
+
+    // Floor lamp in NE corner
+    {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.7, 6), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      pole.position.y = 0.85;
+      const shade = new THREE.Mesh(new THREE.ConeGeometry(0.3, 0.4, 12, 1, true), new THREE.MeshLambertMaterial({ color: 0xf0d9a8, emissive: 0xffd166, emissiveIntensity: 0.7, side: THREE.DoubleSide }));
+      shade.position.y = 1.85;
+      const bulbLight = new THREE.PointLight(0xffd9a0, 0.8, 6, 2);
+      bulbLight.position.y = 1.7;
+      g.add(pole); g.add(shade); g.add(bulbLight);
+      g.position.set(cx + w / 2 - 0.5, cy + 0.05, cz - d / 2 + 0.5);
+      this.scene.add(g);
+    }
+
+    // Container — wooden chest at NE inside corner (deep inside so south wall blocks outside reach).
+    {
+      const chest = this._makeChest(cx + w / 2 - 0.7, cy + 0.05, cz - d / 2 + 0.8, ["healJuice", "schwiftyPotion", "szechuanSauce"]);
+      chest.kind = "house_chest";
+    }
+
+    // Floor clutter inside house
+    this._scatterClutter(cx, cy, cz, w, d, "house");
+  }
+
+  _buildGarageInterior(cx, cy, cz, w, d) {
+    // Workbench against back (north) wall
+    {
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const metal = new THREE.MeshLambertMaterial({ color: 0x666677 });
+      const top = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.1, 0.8), metal);
+      top.position.y = 0.95;
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.2, 0.8), wood);
+      apron.position.y = 0.85;
+      for (const px of [-1.6, 0, 1.6]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.85, 0.7), wood);
+        leg.position.set(px, 0.42, 0);
+        g.add(leg);
+      }
+      g.add(top); g.add(apron);
+      g.position.set(cx, cy + 0.05, cz - d / 2 + 0.6);
+      this.scene.add(g);
+      // Plumbus parts on the bench
+      for (let i = 0; i < 4; i++) {
+        const part = new THREE.Mesh(new THREE.CapsuleGeometry(0.07, 0.18, 4, 6), new THREE.MeshLambertMaterial({ color: 0xc77f6c }));
+        part.position.set(cx - 1.4 + i * 0.7, cy + 0.05 + 1.05, cz - d / 2 + 0.6);
+        part.rotation.z = Math.PI / 2;
+        this.scene.add(part);
+      }
+      // Tools (wrench, hammer)
+      const wrench = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.45), metal);
+      wrench.position.set(cx + 1.0, cy + 0.05 + 1.04, cz - d / 2 + 0.7);
+      this.scene.add(wrench);
+    }
+
+    // Half-built UFO chassis in center
+    {
+      const g = new THREE.Group();
+      const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 0.4, 18), new THREE.MeshLambertMaterial({ color: 0x556677, flatShading: true }));
+      disc.position.y = 0.5;
+      const sparks = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffeb6c }));
+      sparks.position.set(0.4, 0.7, 0.3);
+      g.add(disc); g.add(sparks);
+      g.position.set(cx + 0.6, cy + 0.05, cz + 1.0);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: cx + 0.6, z: cz + 1.0, hitR: 1.4 });
+    }
+
+    // Tool rack on east wall
+    {
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.2, 2.4), new THREE.MeshLambertMaterial({ color: 0x6b3f2a }));
+      board.position.set(cx + w / 2 - 0.06, cy + 1.6, cz);
+      this.scene.add(board);
+      // hanging tools
+      for (let i = 0; i < 4; i++) {
+        const t = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.08), new THREE.MeshLambertMaterial({ color: 0x9a9aa6 }));
+        t.position.set(cx + w / 2 - 0.14, cy + 1.6, cz - 0.9 + i * 0.6);
+        this.scene.add(t);
+      }
+    }
+
+    // Container — toolbox crate
+    {
+      const c1 = this._makeChest(cx - w / 2 + 0.9, cy + 0.05, cz - d / 2 + 1.6, ["plasmaRifle", "schwiftyPotion", "szechuanSauce"]);
+      c1.kind = "garage_chest";
+    }
+    // Stacked crates (decorative, blocking)
+    {
+      const stackGroup = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const cr = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.7, 0.7), new THREE.MeshLambertMaterial({ color: 0x8a6a45, flatShading: true }));
+        cr.position.set(0, 0.35 + i * 0.7, 0);
+        stackGroup.add(cr);
+      }
+      stackGroup.position.set(cx - w / 2 + 0.5, cy + 0.05, cz + d / 2 - 1.0);
+      this.scene.add(stackGroup);
+      this.props.push({ mesh: stackGroup, type: "smith", x: stackGroup.position.x, z: stackGroup.position.z, hitR: 0.5 });
+    }
+    // Oil drum
+    {
+      const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 1, 14), new THREE.MeshLambertMaterial({ color: 0x884422, flatShading: true }));
+      drum.position.set(cx + w / 2 - 1.2, cy + 0.05 + 0.5, cz + d / 2 - 1.5);
+      this.scene.add(drum);
+      this.props.push({ mesh: drum, type: "smith", x: drum.position.x, z: drum.position.z, hitR: 0.5 });
+    }
+
+    // Floor clutter
+    this._scatterClutter(cx, cy, cz, w, d, "garage");
+  }
+
+  _scatterClutter(cx, cy, cz, w, d, kind) {
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const items = kind === "house" ? 14 : 22;
+    for (let i = 0; i < items; i++) {
+      const x = cx + rand(-w / 2 + 0.6, w / 2 - 0.6);
+      const z = cz + rand(-d / 2 + 0.6, d / 2 - 0.6);
+      const y = cy + 0.06;
+      let m;
+      const r = Math.random();
+      if (kind === "house") {
+        if (r < 0.25) {
+          // beer can on floor
+          m = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 8), new THREE.MeshLambertMaterial({ color: 0xc4a017 }));
+          m.position.set(x, y + 0.09, z); m.rotation.z = Math.PI / 2;
+        } else if (r < 0.55) {
+          // book
+          m = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.16), new THREE.MeshLambertMaterial({ color: ["#4a6", "#a44", "#46a", "#a64"][i % 4].replace("#", "0x") | 0x444444 }));
+          // simpler color swap:
+          m.material.color.setHex([0x447766, 0xaa4444, 0x4466aa, 0xaa6644][i % 4]);
+          m.position.set(x, y + 0.02, z); m.rotation.y = Math.random() * Math.PI;
+        } else if (r < 0.8) {
+          // crumpled paper
+          m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.08, 0), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+          m.position.set(x, y + 0.08, z);
+        } else {
+          // toy
+          m = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.1), new THREE.MeshLambertMaterial({ color: 0xffd166 }));
+          m.position.set(x, y + 0.06, z);
+        }
+      } else {
+        // garage: bolts, tools, oil rags
+        if (r < 0.3) {
+          m = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.04, 6), new THREE.MeshLambertMaterial({ color: 0x888888 }));
+          m.position.set(x, y + 0.02, z);
+        } else if (r < 0.55) {
+          m = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.04, 0.3), new THREE.MeshLambertMaterial({ color: 0x666677 }));
+          m.position.set(x, y + 0.02, z); m.rotation.y = Math.random() * Math.PI;
+        } else if (r < 0.8) {
+          m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.07, 0), new THREE.MeshLambertMaterial({ color: 0x553322 }));
+          m.position.set(x, y + 0.07, z);
+        } else {
+          // oil stain (flat circle)
+          m = new THREE.Mesh(new THREE.CircleGeometry(0.3, 12), new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.65 }));
+          m.rotation.x = -Math.PI / 2;
+          m.position.set(x, y + 0.005, z);
+        }
+      }
+      this.scene.add(m);
+    }
+  }
+
+  _buildAmbientCharacters() {
+    // Beth — sitting on the couch inside the house
+    if (this._couchPos) {
+      const b = this._makeHumanoid({ shirt: 0x2b6e8a, hair: 0xd6b06e, skin: 0xfdd6b5 });
+      b.scale.set(0.95, 0.95, 0.95);
+      b.position.set(this._couchPos.x + 0.1, this._couchPos.y + 0.7, this._couchPos.z);
+      b.rotation.y = Math.PI / 2; // facing east toward TV
+      this.scene.add(b);
+      this._ambient.push({ mesh: b, type: "sit", phase: 0 });
+    }
+
+    // Summer — walking the porch (back-and-forth on a path in front of house)
+    {
+      const s = this._makeHumanoid({ shirt: 0xff8866, hair: 0xff6b3a, skin: 0xfdd6b5 });
+      const path = [
+        { x: -14, z: -3 },
+        { x: -6,  z: -3 },
+      ];
+      s.position.set(path[0].x, heightAt(path[0].x, path[0].z), path[0].z);
+      this.scene.add(s);
+      this._ambient.push({ mesh: s, type: "walk", path, target: 1, speed: 1.6, walkPhase: 0 });
+    }
+
+    // Snuffles — the dog, patrolling the yard
+    {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      body.position.y = 0.3;
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      head.position.set(0.4, 0.45, 0);
+      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.1), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+      ear1.position.set(0.42, 0.65, 0.12);
+      const ear2 = ear1.clone(); ear2.position.z = -0.12;
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      tail.position.set(-0.45, 0.45, 0); tail.rotation.z = 0.4;
+      // 4 legs (very small)
+      for (const [px, pz] of [[0.25, 0.13], [0.25, -0.13], [-0.25, 0.13], [-0.25, -0.13]]) {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+        leg.position.set(px, 0.13, pz);
+        g.add(leg);
+      }
+      g.add(body); g.add(head); g.add(ear1); g.add(ear2); g.add(tail);
+      const path = [
+        { x: -4, z: 8 }, { x: 4, z: 8 }, { x: 6, z: 0 }, { x: 0, z: -6 }, { x: -6, z: 0 },
+      ];
+      g.position.set(path[0].x, heightAt(path[0].x, path[0].z), path[0].z);
+      this.scene.add(g);
+      this._ambient.push({ mesh: g, type: "walk", path, target: 1, speed: 2.4, walkPhase: 0, isDog: true });
+    }
+  }
+
+  _makeHumanoid({ shirt = 0x888888, hair = 0x553322, skin = 0xfdd6b5 } = {}) {
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 8), new THREE.MeshLambertMaterial({ color: shirt }));
+    body.position.y = 0.7;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 12, 10), new THREE.MeshLambertMaterial({ color: skin }));
+    head.position.y = 1.7;
+    const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: hair }));
+    hairMesh.position.y = 1.75;
+    for (const sx of [-0.12, 0.12]) {
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+      e.position.set(sx, 1.75, 0.3);
+      g.add(e);
+    }
+    g.add(body); g.add(head); g.add(hairMesh);
+    return g;
+  }
+
+  _makeChest(x, y, z, lootTable) {
+    const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a, flatShading: true });
+    const trim = new THREE.MeshLambertMaterial({ color: 0xc8a040 });
+    const g = new THREE.Group();
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.5, 0.55), wood);
+    base.position.y = 0.25;
+    const lidGroup = new THREE.Group();
+    lidGroup.position.set(0, 0.5, -0.275);
+    const lid = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.55), wood);
+    lid.position.set(0, 0.09, 0.275);
+    const lock = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.06), trim);
+    lock.position.set(0, 0.09, 0.55);
+    lidGroup.add(lid); lidGroup.add(lock);
+    g.add(base); g.add(lidGroup);
+    g.position.set(x, y, z);
+    this.scene.add(g);
+    const c = { x, z, mesh: g, lid: lidGroup, openedRot: 0, opened: false, loot: lootTable };
+    this._containers.push(c);
+    this.props.push({ mesh: g, type: "container", x, z, hitR: 0.6, _container: c });
+    return c;
   }
 
   _makeTextTexture(text, fg = "#3a2418", bg = "#f0d9a8") {
@@ -642,6 +1069,60 @@ export class World {
         sl.mat.color.multiplyScalar(0.5 + k * 0.5);
       }
     }
+    // Front door swings open when player is close to the doorway
+    if (this._smithDoor && cameraPos) {
+      const d = Math.hypot(cameraPos.x - this._smithDoor.x, cameraPos.z - this._smithDoor.z);
+      this._smithDoor.target = d < 4 ? -Math.PI * 0.55 : 0;
+      const k = 6 * dt;
+      this._smithDoor.current += (this._smithDoor.target - this._smithDoor.current) * Math.min(1, k);
+      this._smithDoor.hinge.rotation.y = this._smithDoor.current;
+    }
+
+    // TV screen flicker
+    if (this._smithTV) {
+      const k = 0.4 + 0.6 * Math.abs(Math.sin(t * 8 + Math.sin(t * 2.3) * 3));
+      const r = (k * 0.5 + 0.3), g = (k * 0.7 + 0.2), b = (k * 0.9 + 0.4);
+      this._smithTV.mat.color.setRGB(Math.min(1, r), Math.min(1, g), Math.min(1, b));
+    }
+
+    // Container lid animations
+    for (const c of this._containers || []) {
+      const target = c.opened ? -1.2 : 0;
+      const k = 8 * dt;
+      c.openedRot += (target - c.openedRot) * Math.min(1, k);
+      c.lid.rotation.x = c.openedRot;
+    }
+
+    // Ambient characters
+    if (this._ambient) {
+      for (const a of this._ambient) {
+        if (a.type === "sit") {
+          a.phase += dt;
+          a.mesh.position.y = (a.mesh.userData.baseY ??= a.mesh.position.y) + Math.sin(a.phase * 1.4) * 0.02;
+          a.mesh.rotation.y += Math.sin(a.phase * 0.8) * dt * 0.3;
+        } else if (a.type === "walk") {
+          const tgt = a.path[a.target];
+          const dx = tgt.x - a.mesh.position.x, dz = tgt.z - a.mesh.position.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < 0.3) {
+            a.target = (a.target + 1) % a.path.length;
+          } else {
+            const nx = dx / dist, nz = dz / dist;
+            a.mesh.position.x += nx * a.speed * dt;
+            a.mesh.position.z += nz * a.speed * dt;
+            a.mesh.position.y = heightAt(a.mesh.position.x, a.mesh.position.z) + (a.isDog ? 0 : 0);
+            a.mesh.rotation.y = Math.atan2(nx, nz);
+          }
+          a.walkPhase += dt * a.speed;
+          a.mesh.position.y += Math.abs(Math.sin(a.walkPhase * 4)) * 0.05;
+          if (a.isDog) {
+            // wag tail (rotate the last child added — tail is index 4 in our group)
+            // We'll just bob the dog slightly
+          }
+        }
+      }
+    }
+
     // Chimney smoke: spawn periodically, drift up + fade
     if (this._smithSmoke) {
       const sm = this._smithSmoke;

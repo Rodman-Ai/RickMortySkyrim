@@ -151,9 +151,26 @@ export class Player {
       this.onGround = false;
     }
 
-    // Collide with props (cylindrical)
+    // Collide with props (cylindrical or AABB)
+    const PR = 0.4; // player radius for AABB inflation
     for (const p of world.props) {
       if (p.type === "portal") continue;
+      if (p.hitAABB) {
+        const a = p.hitAABB;
+        if (this.pos.x > a.minX - PR && this.pos.x < a.maxX + PR &&
+            this.pos.z > a.minZ - PR && this.pos.z < a.maxZ + PR) {
+          const left  = this.pos.x - (a.minX - PR);
+          const right = (a.maxX + PR) - this.pos.x;
+          const back  = this.pos.z - (a.minZ - PR);
+          const front = (a.maxZ + PR) - this.pos.z;
+          const m = Math.min(left, right, back, front);
+          if      (m === left)  this.pos.x = a.minX - PR;
+          else if (m === right) this.pos.x = a.maxX + PR;
+          else if (m === back)  this.pos.z = a.minZ - PR;
+          else                  this.pos.z = a.maxZ + PR;
+        }
+        continue;
+      }
       const dx = this.pos.x - p.x, dz = this.pos.z - p.z;
       const d = Math.hypot(dx, dz);
       const minD = p.hitR + 0.5;

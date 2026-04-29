@@ -163,6 +163,23 @@ class Game {
         return;
       }
     }
+    // Container (chest/crate)?
+    if (this.world._containers) {
+      const c = this.world._containers.find((c) => !c.opened && Math.hypot(c.x - this.player.pos.x, c.z - this.player.pos.z) < 1.6);
+      if (c) {
+        c.opened = true;
+        // Drop loot in front of the chest
+        for (let i = 0; i < c.loot.length; i++) {
+          const a = (i / c.loot.length) * Math.PI - Math.PI / 2;
+          const dx = Math.cos(a) * 1.0, dz = Math.sin(a) * 1.0;
+          this.combat._spawnLoot(c.x + dx, heightAt(c.x + dx, c.z + dz), c.z + dz, c.loot[i]);
+        }
+        this.ui.toast("Found loot!");
+        sfx.pickup();
+        return;
+      }
+    }
+
     // Shrine?
     const shrine = this.world.shrines.find((s) => Math.hypot(s.x - this.player.pos.x, s.z - this.player.pos.z) < 2.2);
     if (shrine) {

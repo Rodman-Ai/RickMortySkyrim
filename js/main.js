@@ -344,13 +344,18 @@ document.getElementById("cfg-invert").addEventListener("change", (e) => game.inp
 // Mobile menu button handled via [data-act="menu"]? — explicit
 document.getElementById("mobile-menu").addEventListener("click", () => game.ui.toggleMenu());
 
-// Show title screen after loading screen
-window.addEventListener("DOMContentLoaded", () => {
-  // Pretend brief loading
+// Show title screen after a brief loading sim.
+// Note: ES modules execute *after* DOMContentLoaded, so this runs immediately
+// at module-eval time rather than waiting for an event that has already fired.
+(function showLoaderThenTitle() {
   let p = 0;
   const tick = setInterval(() => {
     p += 6 + Math.random() * 6;
     game.ui.showLoading(true, "Booting interdimensional engine…", Math.min(100, p));
-    if (p >= 100) { clearInterval(tick); game.ui.showLoading(false); document.getElementById("title-screen").classList.remove("hidden"); }
+    if (p >= 100) {
+      clearInterval(tick);
+      game.ui.showLoading(false);
+      document.getElementById("title-screen").classList.remove("hidden");
+    }
   }, 60);
-});
+})();

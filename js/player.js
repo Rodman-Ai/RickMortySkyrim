@@ -95,6 +95,7 @@ export class Player {
     this._currentWeaponKey = null;
     this._shake = new THREE.Vector3();
     this._shakeT = 0;
+  }
 
   applyLook(dx, dy) {
     this.yaw -= dx;

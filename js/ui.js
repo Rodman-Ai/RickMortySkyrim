@@ -14,6 +14,8 @@ export class UI {
     this.barST = this.$("bar-st");
     this.compassStrip = this.$("compass-strip");
     this.compassWaypoint = this.$("compass-waypoint");
+    this.hudMinimap = this.$("hud-minimap");
+    this.hudMinimapCtx = this.hudMinimap?.getContext("2d");
     this.schmecklesNum = this.$("schmeckles-num");
     this.questTrackerText = this.$("quest-tracker-text");
     this.interactHint = this.$("interact-hint");
@@ -149,6 +151,7 @@ export class UI {
     this._updateEnemyBars(player);
     this._updateFloaters(dt, player);
     this._updateCrosshair(player);
+    this._renderHudMinimap(player, qActive);
 
     // Zone banner on entry
     const zone = this._zoneAt(player.pos.x, player.pos.z);
@@ -505,6 +508,171 @@ export class UI {
     }
     if (bestE) bestE._highlight = true;
     this._lastTarget = bestE;
+  }
+
+  // === Always-on HUD minimap ===
+  // Player-centred top-down disc showing nearby NPCs / enemies / zones,
+  // a heading triangle, and a quest-target marker pinned to the rim if
+  // the target is outside the visible radius.
+  _renderHudMinimap(player, activeQuest) {
+    const ctx = this.hudMinimapCtx;
+    if (!ctx) return;
+    const W = this.hudMinimap.width, H = this.hudMinimap.height;
+    const cx = W / 2, cy = H / 2;
+    const radius = Math.min(W, H) / 2 - 2;
+    const RANGE = 60;            // how many world units fit from center to rim
+    const scale = radius / RANGE;
+
+    // Rotate so player heading is up
+    const yaw = player.yaw;
+    // Map a world-space (wx,wz) point to canvas-space relative to player+yaw
+    // World forward (player heading) = (-sin yaw, -cos yaw); project that to "up" on canvas (negative Y)
+    const worldToCanvas = (wx, wz) => {
+      const dx = wx - player.pos.x;
+      const dz = wz - player.pos.z;
+      // Rotate by -yaw so heading aligns with -Z on canvas
+      const cos = Math.cos(yaw), sin = Math.sin(yaw);
+      const lx =  dx * cos - dz * sin;     // local x (right)
+      const lz =  dx * sin + dz * cos;     // local z (forward = -lz on canvas)
+      return { x: cx + lx * scale, y: cy + lz * scale };
+    };
+
+    // Background disc + clip mask
+    ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.clip();
+
+    // Background tint
+    ctx.fillStyle = "rgba(8,12,22,0.85)";
+    ctx.fillRect(0, 0, W, H);
+
+    // Zones — colored discs centered at zone center
+    for (const z of ZONES) {
+      const p = worldToCanvas(z.cx, z.cz);
+      const r = z.r * scale;
+      // Skip if entirely off the disc
+      const d = Math.hypot(p.x - cx, p.y - cy);
+      if (d - r > radius) continue;
+      ctx.fillStyle = "#" + z.color.toString(16).padStart(6, "0");
+      ctx.globalAlpha = 0.30;
+      ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // POIs — small purple pins
+    ctx.fillStyle = "#aa88ff";
+    for (const poi of POIS) {
+      const p = worldToCanvas(poi.x, poi.z);
+      if (Math.hypot(p.x - cx, p.y - cy) > radius) continue;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // NPCs — gold dots
+    ctx.fillStyle = "#ffd166";
+    for (const n of this.game.npcMgr.list) {
+      const p = worldToCanvas(n._x, n._z);
+      if (Math.hypot(p.x - cx, p.y - cy) > radius) continue;
+      ctx.beginPath(); ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Enemies — red dots (boss = bigger ring)
+    for (const e of this.game.enemyMgr.list) {
+      if (e.dead) continue;
+      const p = worldToCanvas(e.x, e.z);
+      if (Math.hypot(p.x - cx, p.y - cy) > radius) continue;
+      ctx.fillStyle = e.boss ? "#ff8844" : "#ff5577";
+      ctx.beginPath(); ctx.arc(p.x, p.y, e.boss ? 5 : 2.5, 0, Math.PI * 2); ctx.fill();
+      if (e.boss) {
+        ctx.strokeStyle = "#ff8844"; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, Math.PI * 2); ctx.stroke();
+      }
+    }
+
+    // Player heading triangle (always at center, pointing up)
+    ctx.fillStyle = "#5dffd1";
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 9);
+    ctx.lineTo(cx - 6, cy + 6);
+    ctx.lineTo(cx + 6, cy + 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "#0c2a22"; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // Active quest target marker (yellow ▲ at edge if off-map, on the spot if visible)
+    const tgt = this._questTarget(activeQuest, player);
+    if (tgt) {
+      const p = worldToCanvas(tgt.x, tgt.z);
+      const dx = p.x - cx, dy = p.y - cy;
+      const dist = Math.hypot(dx, dy);
+      const blink = 0.5 + 0.5 * Math.abs(Math.sin(performance.now() * 0.005));
+      ctx.fillStyle = `rgba(255, 209, 102, ${0.55 + blink * 0.45})`;
+      ctx.strokeStyle = "#000"; ctx.lineWidth = 1.5;
+      if (dist <= radius - 4) {
+        // Inside the disc — draw a star/diamond at the actual position
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - 7);
+        ctx.lineTo(p.x + 5, p.y);
+        ctx.lineTo(p.x, p.y + 7);
+        ctx.lineTo(p.x - 5, p.y);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+      } else {
+        // Outside — pin to rim, point outward
+        const ang = Math.atan2(dy, dx);
+        const ex = cx + Math.cos(ang) * (radius - 8);
+        const ey = cy + Math.sin(ang) * (radius - 8);
+        ctx.save();
+        ctx.translate(ex, ey);
+        ctx.rotate(ang + Math.PI / 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -8);
+        ctx.lineTo(6, 4);
+        ctx.lineTo(-6, 4);
+        ctx.closePath();
+        ctx.fill(); ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    ctx.restore();
+
+    // Outer rim + cardinal "N"
+    ctx.strokeStyle = "rgba(0, 182, 125, 0.6)";
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+
+    // North marker — world -Z direction projected through the same rotation
+    // applied to the rest of the minimap. At yaw=0 N is at top; at yaw=π/2
+    // (player facing world -X) N is on canvas right.
+    const nx = cx + Math.sin(yaw) * (radius - 10);
+    const ny = cy - Math.cos(yaw) * (radius - 10);
+    ctx.fillStyle = "#ffd166";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("N", nx, ny);
+  }
+
+  _questTarget(activeQuest, player) {
+    if (!activeQuest) return null;
+    const obj = activeQuest.def.objectives[0];
+    if (activeQuest.done) {
+      const npc = NPCS.find((n) => n.id === activeQuest.def.next?.npc);
+      if (npc) return { x: npc.pos[0], z: npc.pos[2], kind: "turnin" };
+    }
+    if (obj.type === "kill") {
+      let bd = Infinity, found = null;
+      for (const e of this.game.enemyMgr.list) {
+        if (e.dead || e.type !== obj.target) continue;
+        const d = Math.hypot(e.x - player.pos.x, e.z - player.pos.z);
+        if (d < bd) { bd = d; found = e; }
+      }
+      if (found) return { x: found.x, z: found.z, kind: "enemy" };
+    }
+    if (obj.type === "pickup" && obj.target === "lost_plumbus") {
+      const lp = this.game.world?.lostPlumbus;
+      if (lp && !lp.taken) return { x: lp.x, z: lp.z, kind: "pickup" };
+    }
+    return null;
   }
 
   // === Compass quest waypoint ===

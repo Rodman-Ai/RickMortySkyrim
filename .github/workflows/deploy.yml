@@ -28,6 +28,10 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Auto-enable Pages and set it to deploy from GitHub Actions
+          # if it isn't already configured. Requires pages: write permission.
+          enablement: true
 
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3

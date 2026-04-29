@@ -99,6 +99,33 @@ export class World {
     this.sky = new THREE.Mesh(geo, mat);
     this.scene.add(this.sky);
     this.skyMat = mat;
+
+    // Stars — points cloud on a smaller dome, only visible at night
+    const starCount = 800;
+    const starPos = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      // Distribute on upper hemisphere
+      const u = Math.random(), v = Math.random() * 0.5; // upper half
+      const theta = u * Math.PI * 2;
+      const phi = Math.acos(1 - 2 * v);
+      const r = 700;
+      starPos[i * 3]     = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i * 3 + 1] = r * Math.cos(phi);
+      starPos[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0 });
+    this.stars = new THREE.Points(starGeo, starMat);
+    this.scene.add(this.stars);
+
+    // Sun and moon discs (billboards)
+    const sunMat = new THREE.MeshBasicMaterial({ color: 0xfff4c2, transparent: true, opacity: 0.95 });
+    this.sunDisc = new THREE.Mesh(new THREE.CircleGeometry(18, 24), sunMat);
+    this.scene.add(this.sunDisc);
+    const moonMat = new THREE.MeshBasicMaterial({ color: 0xe8eaf6, transparent: true, opacity: 0.85 });
+    this.moonDisc = new THREE.Mesh(new THREE.CircleGeometry(11, 20), moonMat);
+    this.scene.add(this.moonDisc);
   }
 
   _buildLights() {
@@ -149,7 +176,6 @@ export class World {
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(x, y + trunkH / 2, z);
     const leafGeo = new THREE.IcosahedronGeometry(2 + Math.random() * 1.5, 0);
-    // alien colors — pick from a Rick palette
     const palettes = [0x97ce4c, 0x5dffd1, 0xc28bff, 0xffaa66, 0x44ddaa];
     const c = palettes[(Math.random() * palettes.length) | 0];
     const leafMat = new THREE.MeshLambertMaterial({ color: c, flatShading: true });
@@ -158,7 +184,11 @@ export class World {
     const g = new THREE.Group();
     g.add(trunk); g.add(leaves);
     this.scene.add(g);
-    this.props.push({ mesh: g, type: "tree", hitR: 0.7, x, z });
+    this.props.push({
+      mesh: g, type: "tree", hitR: 0.7, x, z,
+      _leaves: leaves, _swayPhase: Math.random() * Math.PI * 2,
+      _baseY: leaves.position.y,
+    });
   }
 
   _addRock(x, z) {
@@ -185,9 +215,12 @@ export class World {
     const inner = new THREE.Mesh(innerGeo, innerMat);
     inner.position.copy(ring.position);
     inner.rotation.x = Math.PI / 2;
-    const g = new THREE.Group(); g.add(ring); g.add(inner);
+    // Real point light so the portal actually illuminates the terrain
+    const light = new THREE.PointLight(0x5dffd1, 1.6, 22, 2);
+    light.position.set(x, y + 2.4, z);
+    const g = new THREE.Group(); g.add(ring); g.add(inner); g.add(light);
     this.scene.add(g);
-    this.props.push({ mesh: g, type: "portal", hitR: 1.2, x, z, anim: ring });
+    this.props.push({ mesh: g, type: "portal", hitR: 1.2, x, z, anim: ring, _light: light });
   }
 
   _addHut(x, z) {
@@ -236,10 +269,7 @@ export class World {
   }
 
   _placeShrines() {
-    // Shrine: glowing ring at smith garage and a couple zones
-    const positions = [
-      [0, 0], [180, 120], [-180, -160], [-210, 180]
-    ];
+    const positions = [[0, 0], [180, 120], [-180, -160], [-210, 180]];
     for (const [x, z] of positions) {
       const y = heightAt(x, z);
       const geo = new THREE.TorusGeometry(1.4, 0.18, 8, 24);
@@ -247,8 +277,10 @@ export class World {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y + 0.4, z);
       m.rotation.x = Math.PI / 2;
-      this.scene.add(m);
-      this.shrines.push({ x, y: y, z, mesh: m });
+      const light = new THREE.PointLight(0xffd166, 1.2, 14, 2);
+      light.position.set(x, y + 0.8, z);
+      this.scene.add(m); this.scene.add(light);
+      this.shrines.push({ x, y, z, mesh: m, light });
     }
   }
 
@@ -265,27 +297,59 @@ export class World {
   }
 
   // Day/night cycle update
-  update(dt, timeOfDay) {
+  update(dt, timeOfDay, cameraPos) {
     // timeOfDay: 0..1 (0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset)
     const sunAngle = timeOfDay * Math.PI * 2 - Math.PI / 2;
     const sunY = Math.sin(sunAngle);
     const sunX = Math.cos(sunAngle);
     this.sun.position.set(sunX * 200, Math.max(10, sunY * 200), 60);
     const dayFactor = Math.max(0, sunY);
+    const nightFactor = Math.max(0, -sunY);
     this.sun.intensity = 0.2 + dayFactor * 0.9;
-    this.ambient.intensity = 0.25 + dayFactor * 0.45;
-    this.hemi.intensity = 0.2 + dayFactor * 0.45;
+    this.ambient.intensity = 0.18 + dayFactor * 0.45;
+    this.hemi.intensity = 0.15 + dayFactor * 0.45;
     // Sky tint
     const dawnish = Math.max(0, 1 - Math.abs(sunY - 0.05) * 5);
     const top = this.skyMat.uniforms.topColor.value;
     const bot = this.skyMat.uniforms.bottomColor.value;
-    top.setHSL(0.6, 0.5, 0.15 + dayFactor * 0.45);
-    bot.setHSL(0.07 + dawnish * 0.05, 0.6, 0.55 + dayFactor * 0.25);
-    this.scene.fog.color.copy(bot).multiplyScalar(0.85);
-    this.scene.background = bot.clone().multiplyScalar(1.05);
-    // Animate portals
+    top.setHSL(0.6, 0.5, 0.05 + dayFactor * 0.45);
+    bot.setHSL(0.07 + dawnish * 0.05, 0.6, 0.25 + dayFactor * 0.55);
+    this.scene.fog.color.copy(bot).multiplyScalar(0.8);
+    this.scene.background = bot.clone().multiplyScalar(1.0);
+
+    // Stars fade in at night
+    this.stars.material.opacity = nightFactor * 0.9;
+    if (cameraPos) this.stars.position.set(cameraPos.x, 0, cameraPos.z);
+
+    // Sun & moon discs — billboards opposite each other
+    const center = cameraPos || { x: 0, y: 0, z: 0 };
+    const sunOrbitR = 600;
+    const sx = center.x + sunX * sunOrbitR, sy = sunY * sunOrbitR, sz = center.z + 60;
+    this.sunDisc.position.set(sx, sy, sz);
+    this.sunDisc.lookAt(center.x, sy, center.z);
+    this.sunDisc.material.opacity = Math.max(0, sunY) * 0.95;
+    this.sunDisc.visible = sunY > -0.05;
+    const moonAng = sunAngle + Math.PI;
+    const mx = center.x + Math.cos(moonAng) * sunOrbitR, my = Math.sin(moonAng) * sunOrbitR, mz = center.z + 60;
+    this.moonDisc.position.set(mx, my, mz);
+    this.moonDisc.lookAt(center.x, my, center.z);
+    this.moonDisc.material.opacity = nightFactor * 0.85;
+    this.moonDisc.visible = nightFactor > 0.05;
+
+    // Animate portals + tree sway + shrine pulse
+    const t = performance.now() * 0.001;
     for (const p of this.props) {
-      if (p.type === "portal" && p.anim) p.anim.rotation.z += dt * 1.4;
+      if (p.type === "portal" && p.anim) {
+        p.anim.rotation.z += dt * 1.4;
+        if (p._light) p._light.intensity = 1.2 + Math.sin(t * 4) * 0.4;
+      } else if (p.type === "tree" && p._leaves) {
+        const sway = Math.sin(t * 1.4 + p._swayPhase) * 0.06;
+        p._leaves.rotation.z = sway;
+        p._leaves.position.x = p.x + Math.sin(t * 1.1 + p._swayPhase) * 0.15;
+      }
+    }
+    for (const s of this.shrines) {
+      if (s.light) s.light.intensity = 1.0 + Math.sin(t * 3 + s.x) * 0.4;
     }
   }
 }

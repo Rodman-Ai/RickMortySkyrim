@@ -9,6 +9,41 @@ const SPRINT_MULT = 1.7;
 const JUMP_VEL = 9;
 const GRAVITY = 24;
 
+function buildPlumbusModel() {
+  const g = new THREE.Group();
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.45, 10), new THREE.MeshLambertMaterial({ color: 0x8a5a3a }));
+  handle.position.set(0, -0.05, 0);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.18, 4, 8), new THREE.MeshLambertMaterial({ color: 0xc77f6c, flatShading: true }));
+  body.position.set(0, 0.18, 0);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshLambertMaterial({ color: 0x9c5544 }));
+  knob.position.set(0, 0.35, 0);
+  // Hand stub
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
+  hand.position.set(0, -0.3, 0);
+  g.add(handle); g.add(body); g.add(knob); g.add(hand);
+  return g;
+}
+function buildPlasmaRifleModel() {
+  const g = new THREE.Group();
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.5), new THREE.MeshLambertMaterial({ color: 0x444455 }));
+  stock.position.set(0, -0.05, -0.05);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.55, 10), new THREE.MeshLambertMaterial({ color: 0x666677 }));
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0.02, 0.0, 0.32);
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 10), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
+  tip.rotation.x = Math.PI / 2;
+  tip.position.set(0.02, 0.0, 0.6);
+  // glow point
+  const glow = new THREE.PointLight(0x97ce4c, 0.8, 3, 2);
+  glow.position.copy(tip.position);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1), new THREE.MeshLambertMaterial({ color: 0x222233 }));
+  grip.position.set(0, -0.18, 0.05);
+  const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
+  hand.position.set(0, -0.28, 0.05);
+  g.add(stock); g.add(barrel); g.add(tip); g.add(glow); g.add(grip); g.add(hand);
+  return g;
+}
+
 export class Player {
   constructor(camera) {
     this.camera = camera;
@@ -45,7 +80,24 @@ export class Player {
     this.forward = new THREE.Vector3();
 
     this._stepTimer = 0;
-  }
+
+    // First-person viewmodel rig — child of camera, lives in screen space.
+    this.viewmodel = new THREE.Group();
+    this.viewmodel.position.set(0.32, -0.32, -0.55);
+    this.viewmodel.rotation.set(0, -0.05, 0);
+    this.camera.add(this.viewmodel);
+    if (!this.camera.parent) {
+      // Camera hasn't been added to a scene yet; the renderer still draws it,
+      // but children only render when traversed via the scene. We add it later
+      // from main once the scene exists. For now, a no-op.
+    }
+    this._weaponMeshes = {
+      plumbus: buildPlumbusModel(),
+      plasmaRifle: buildPlasmaRifleModel(),
+    };
+    this._currentWeaponKey = null;
+    this._shake = new THREE.Vector3();
+    this._shakeT = 0;
 
   applyLook(dx, dy) {
     this.yaw -= dx;
@@ -132,8 +184,18 @@ export class Player {
       const bob = Math.sin(performance.now() * 0.012 * (sprinting ? 1.6 : 1.0)) * 0.05 * (move.length() > 0 ? 1 : 0);
       this.camera.position.y += bob;
     }
+    // Camera shake (decays)
+    if (this._shakeT > 0) {
+      this._shakeT = Math.max(0, this._shakeT - dt * 4);
+      const k = this._shakeT;
+      this.camera.position.x += (Math.random() - 0.5) * 0.18 * k;
+      this.camera.position.y += (Math.random() - 0.5) * 0.18 * k;
+    }
     const rotEuler = new THREE.Euler(this.pitch, this.yaw, 0, "YXZ");
     this.camera.quaternion.setFromEuler(rotEuler);
+
+    // Viewmodel — swap to current weapon and animate
+    this._updateViewmodel(dt, move.length() > 0, sprinting);
 
     // Regen mana
     this.mp = Math.min(this.maxMP, this.mp + 6 * dt);
@@ -180,6 +242,35 @@ export class Player {
     combat.playerShout(kind);
   }
 
+  _updateViewmodel(dt, moving, sprinting) {
+    const desiredKey = this.attackKind === "ranged" && this.equipped.ranged
+      ? this.equipped.ranged
+      : (this.equipped.melee || "plumbus");
+    if (desiredKey !== this._currentWeaponKey) {
+      // swap mesh
+      if (this._currentMesh) this.viewmodel.remove(this._currentMesh);
+      const mesh = this._weaponMeshes[desiredKey] || this._weaponMeshes.plumbus;
+      this.viewmodel.add(mesh);
+      this._currentMesh = mesh;
+      this._currentWeaponKey = desiredKey;
+    }
+    const t = performance.now() * 0.001;
+    // sway with movement
+    const swayX = Math.sin(t * (sprinting ? 11 : 6)) * (moving ? 0.05 : 0.012);
+    const swayY = Math.cos(t * (sprinting ? 22 : 12)) * (moving ? 0.04 : 0.008);
+    // attack animation: melee swings forward+rotate, ranged recoils
+    const a = this.attackAnim;
+    if (this.attackKind === "ranged") {
+      this.viewmodel.position.set(0.32 + swayX, -0.32 + swayY, -0.55 + a * 0.18);
+      this.viewmodel.rotation.set(-a * 0.4, -0.05, 0);
+    } else {
+      this.viewmodel.position.set(0.32 + swayX, -0.32 + swayY, -0.55);
+      this.viewmodel.rotation.set(-a * 0.6, -0.05 + a * 0.6, a * 0.7);
+    }
+  }
+
+  shake(amount = 1) { this._shakeT = Math.min(1.4, this._shakeT + amount); }
+
   takeDamage(amount) {
     let def = 0;
     if (this.equipped.head) def += 8;
@@ -187,8 +278,10 @@ export class Player {
     const final = Math.max(1, amount - def);
     this.hp -= final;
     this.hitFlash = 0.4;
+    this.shake(0.6);
     sfx.hit();
     if (this.hp < 0) this.hp = 0;
+    return final;
   }
 
   addXP(n) {

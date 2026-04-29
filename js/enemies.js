@@ -193,13 +193,17 @@ export class Enemy {
     this.mesh.position.set(this.x, this.y, this.z);
     this.mesh.rotation.y = this.facing;
 
-    // Flash on damage
+    // Flash on damage / target highlight
     this.flash = Math.max(0, this.flash - dt);
+    const flashColor = this.flash > 0 ? 0xff5577 : (this._highlight ? 0x5dffd1 : 0x000000);
+    const flashIntensity = this.flash > 0 ? 1 : (this._highlight ? 0.5 : 0);
     this.mesh.traverse((c) => {
       if (c.material && c.material.emissive !== undefined) {
-        c.material.emissive = new THREE.Color(this.flash > 0 ? 0xff5577 : 0x000000);
+        c.material.emissive.setHex(flashColor);
+        if (c.material.emissiveIntensity !== undefined) c.material.emissiveIntensity = flashIntensity;
       }
     });
+    this._highlight = false; // UI re-asserts each frame
 
     // Cromulon idle wobble
     if (this.boss) this.mesh.position.y += Math.sin(performance.now() * 0.001) * 0.4;

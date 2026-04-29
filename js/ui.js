@@ -1,5 +1,6 @@
 // UI controller: HUD bars, dialogue, menu tabs, minimap, toasts, zone banner.
-import { ITEMS, POIS, ZONES, FLAVOR } from "./data.js";
+import * as THREE from "three";
+import { ITEMS, POIS, ZONES, FLAVOR, NPCS } from "./data.js";
 import { sfx } from "./audio.js";
 
 export class UI {
@@ -12,9 +13,13 @@ export class UI {
     this.barMP = this.$("bar-mp");
     this.barST = this.$("bar-st");
     this.compassStrip = this.$("compass-strip");
+    this.compassWaypoint = this.$("compass-waypoint");
     this.schmecklesNum = this.$("schmeckles-num");
     this.questTrackerText = this.$("quest-tracker-text");
     this.interactHint = this.$("interact-hint");
+    this.crosshair = this.$("crosshair");
+    this.floaters = this.$("floaters");
+    this.enemyBars = this.$("enemy-bars");
     this.toastEl = this.$("toast");
     this.zoneBanner = this.$("zone-banner");
     this.damageVignette = this.$("damage-vignette");
@@ -27,6 +32,11 @@ export class UI {
     this.tabBtns = Array.from(document.querySelectorAll(".tab"));
     this.deathScreen = this.$("death-screen");
     this.deathMsg = this.$("death-msg");
+
+    // Reusable scratch vector for projection
+    this._proj = new THREE.Vector3();
+    // Pool of enemy bar DOM nodes keyed by enemy id
+    this._enemyBarMap = new Map();
 
     // Compass numerals
     this._buildCompass();
@@ -106,7 +116,6 @@ export class UI {
 
     // Compass
     const yawDeg = (player.yaw * 180 / Math.PI) % 360;
-    // strip is 50% padded; each tick is 50px and 15° apart -> 10/3 px per deg
     const offset = (-yawDeg) * (50 / 15);
     this.compassStrip.style.transform = `translateX(${offset}px)`;
 
@@ -121,15 +130,25 @@ export class UI {
       cd.classList.toggle("ready", t <= 0);
     }
 
-    // Active quest tracker
+    // Active quest tracker + compass waypoint
     const qActive = this.game.questLog.active && this.game.questLog.quests[this.game.questLog.active];
     if (qActive) {
       const o = qActive.def.objectives[0];
       const p = qActive.progress[0].count;
       this.questTrackerText.innerHTML = `<b>${qActive.def.title}</b><br/>${p}/${o.count} ${qActive.def.text}`;
+      this._updateWaypoint(qActive, player);
     } else {
       this.questTrackerText.textContent = "—";
+      this.compassWaypoint.classList.add("hidden");
     }
+
+    // Force-refresh camera matrices so projection is correct this frame
+    player.camera.updateMatrixWorld(true);
+
+    // Project enemies / floaters / waypoints to screen
+    this._updateEnemyBars(player);
+    this._updateFloaters(dt, player);
+    this._updateCrosshair(player);
 
     // Zone banner on entry
     const zone = this._zoneAt(player.pos.x, player.pos.z);
@@ -387,4 +406,143 @@ export class UI {
   }
   isDialogueOpen() { return this._dialogueOpen; }
   isMenuOpen() { return !this.menu.classList.contains("hidden"); }
+
+  // === Damage floaters ===
+  // worldX/Y/Z is the spawn position; kind is "enemy" (yellow) or "player" (red)
+  spawnDamage(x, y, z, amount, kind = "enemy") {
+    const el = document.createElement("div");
+    el.className = "floater " + kind + (amount >= 50 ? " crit" : "");
+    el.textContent = "-" + Math.round(amount);
+    el.dataset.wx = x; el.dataset.wy = y; el.dataset.wz = z;
+    el.dataset.born = performance.now();
+    this.floaters.appendChild(el);
+    // Clean up after animation
+    setTimeout(() => el.remove(), 1100);
+  }
+
+  _updateFloaters(dt, player) {
+    if (!this.floaters.children.length) return;
+    const cam = player.camera;
+    const w = window.innerWidth, h = window.innerHeight;
+    const fwd = this._fwdScratch || (this._fwdScratch = new THREE.Vector3());
+    cam.getWorldDirection(fwd);
+    for (const el of this.floaters.children) {
+      const wx = +el.dataset.wx, wy = +el.dataset.wy, wz = +el.dataset.wz;
+      // Behind-camera cull
+      const ax = wx - cam.position.x, ay = wy - cam.position.y, az = wz - cam.position.z;
+      if (ax * fwd.x + ay * fwd.y + az * fwd.z <= 0) { el.style.display = "none"; continue; }
+      this._proj.set(wx, wy, wz).project(cam);
+      el.style.display = "";
+      el.style.left = ((this._proj.x + 1) * 0.5 * w) + "px";
+      el.style.top = ((-this._proj.y + 1) * 0.5 * h) + "px";
+    }
+  }
+
+  // === Enemy HP bars ===
+  _updateEnemyBars(player) {
+    const cam = player.camera;
+    const w = window.innerWidth, h = window.innerHeight;
+    const fwd = this._fwdScratch || (this._fwdScratch = new THREE.Vector3());
+    cam.getWorldDirection(fwd);
+    const seen = new Set();
+    for (const e of this.game.enemyMgr.list) {
+      if (e.dead) continue;
+      const visible = (e.aggro || e.hp < e.maxHP || e.boss) && (Math.hypot(e.x - player.pos.x, e.z - player.pos.z) < 80);
+      if (!visible) continue;
+      const wy = e.y + (e.boss ? 16 : 2.6);
+      const ax = e.x - cam.position.x, ay = wy - cam.position.y, az = e.z - cam.position.z;
+      if (ax * fwd.x + ay * fwd.y + az * fwd.z <= 0) continue; // behind camera
+      this._proj.set(e.x, wy, e.z).project(cam);
+      seen.add(e.id);
+      let bar = this._enemyBarMap.get(e.id);
+      if (!bar) {
+        bar = document.createElement("div");
+        bar.className = "enemy-bar" + (e.boss ? " boss" : "");
+        bar.innerHTML = `<div class="nm"></div><div class="track"><div class="fill"></div></div>`;
+        this.enemyBars.appendChild(bar);
+        this._enemyBarMap.set(e.id, bar);
+      }
+      bar.style.left = ((this._proj.x + 1) * 0.5 * w) + "px";
+      bar.style.top = ((-this._proj.y + 1) * 0.5 * h) + "px";
+      const nameMap = { cronenberg: "Cronenberg", trooper: "Federation Trooper", meeseeks: "Mr. Meeseeks", cromulon: "CROMULON" };
+      bar.querySelector(".nm").textContent = nameMap[e.type] || e.type;
+      bar.querySelector(".fill").style.width = Math.max(0, e.hp / e.maxHP * 100) + "%";
+    }
+    // Remove stale bars
+    for (const [id, el] of this._enemyBarMap) {
+      if (!seen.has(id)) { el.remove(); this._enemyBarMap.delete(id); }
+    }
+  }
+
+  // === Crosshair targeting ===
+  _updateCrosshair(player) {
+    const fwd = new THREE.Vector3();
+    player.camera.getWorldDirection(fwd);
+    let onEnemy = false;
+    let bestT = Infinity, bestE = null;
+    for (const e of this.game.enemyMgr.list) {
+      if (e.dead) continue;
+      const dx = e.x - player.pos.x;
+      const dy = (e.y + 1.2) - player.pos.y;
+      const dz = e.z - player.pos.z;
+      const along = dx * fwd.x + dy * fwd.y + dz * fwd.z;
+      if (along < 0.5 || along > 60) continue;
+      // Closest distance from line to enemy center
+      const px = dx - along * fwd.x, py = dy - along * fwd.y, pz = dz - along * fwd.z;
+      const off = Math.hypot(px, py, pz);
+      const radius = e.hitR + 0.4;
+      if (off > radius) continue;
+      if (along < bestT) { bestT = along; bestE = e; }
+    }
+    onEnemy = !!bestE;
+    this.crosshair.classList.toggle("on-enemy", onEnemy);
+    // Soft emissive glow on the targeted enemy mesh
+    if (this._lastTarget && this._lastTarget !== bestE) {
+      this._lastTarget._highlight = false;
+    }
+    if (bestE) bestE._highlight = true;
+    this._lastTarget = bestE;
+  }
+
+  // === Compass quest waypoint ===
+  _updateWaypoint(activeQuest, player) {
+    // Find a target in the world: NPC turn-in or enemy/POI of objective.
+    const obj = activeQuest.def.objectives[0];
+    let tx = null, tz = null, label = "";
+    if (activeQuest.done) {
+      const npc = NPCS.find((n) => n.id === activeQuest.def.next?.npc);
+      if (npc) { tx = npc.pos[0]; tz = npc.pos[2]; label = "Turn in"; }
+    } else if (obj.type === "kill") {
+      // Closest live enemy of that type
+      let bd = Infinity, found = null;
+      for (const e of this.game.enemyMgr.list) {
+        if (e.dead || e.type !== obj.target) continue;
+        const d = Math.hypot(e.x - player.pos.x, e.z - player.pos.z);
+        if (d < bd) { bd = d; found = e; }
+      }
+      if (found) { tx = found.x; tz = found.z; }
+    } else if (obj.type === "pickup" && obj.target === "lost_plumbus") {
+      const lp = this.game.world?.lostPlumbus;
+      if (lp && !lp.taken) { tx = lp.x; tz = lp.z; }
+    }
+    if (tx === null) { this.compassWaypoint.classList.add("hidden"); return; }
+
+    // Compass strip is positioned so center=current heading.
+    // We render bearing relative to player's facing; clamp visually within strip.
+    const compassEl = this.$("compass");
+    const rect = compassEl.getBoundingClientRect();
+    const ang = Math.atan2(tx - player.pos.x, tz - player.pos.z);  // bearing in world (z forward)
+    let rel = ang - player.yaw;
+    while (rel > Math.PI) rel -= Math.PI * 2;
+    while (rel < -Math.PI) rel += Math.PI * 2;
+    const relDeg = -rel * 180 / Math.PI;        // -180..180 (negate because compass scrolls inverse)
+    const clamped = Math.max(-90, Math.min(90, relDeg));
+    const center = rect.left + rect.width / 2;
+    const x = center + (clamped / 90) * (rect.width / 2 - 14);
+    this.compassWaypoint.style.left = x + "px";
+    this.compassWaypoint.style.top = (rect.bottom + 2) + "px";
+    this.compassWaypoint.style.position = "fixed";
+    this.compassWaypoint.classList.remove("hidden");
+    this.compassWaypoint.title = label || "Quest target";
+  }
 }

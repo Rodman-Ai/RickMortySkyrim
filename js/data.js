@@ -11,6 +11,7 @@ export const ITEMS = {
   birdpersonHelm: { name: "Helm of Birdperson", desc: "In bird culture, helmets are protection.", type: "armor", slot: "head", def: 8, icon: "🪶" },
   pickleArmor: { name: "Pickle Plate", desc: "I turned myself into a pickle!", type: "armor", slot: "body", def: 14, icon: "🥒" },
   schmeckles: { name: "Schmeckles", desc: "Universally accepted (in this universe).", type: "currency", icon: "🪙" },
+  schmecklePouch: { name: "Schmeckle Pouch", desc: "Loose change.", type: "consume", effect: "currency", icon: "💰" },
 };
 
 // Zone definitions (radius positions on the world map; world is ~600x600 around origin)

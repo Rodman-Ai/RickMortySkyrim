@@ -47,6 +47,8 @@ class Game {
     this.ui.showLoading(true, "Spawning Cronenbergs…", 35);
     await new Promise((r) => setTimeout(r, 30));
     this.player = new Player(this.camera);
+    // Camera must be in the scene graph for the viewmodel (camera child) to render.
+    this.scene.add(this.camera);
     this.enemyMgr = new EnemyManager(this.scene);
     this.enemyMgr.populateWorld();
     this.ui.showLoading(true, "Convincing Rick to participate…", 70);
@@ -285,11 +287,12 @@ class Game {
     this.player.update(sdt, ip, this.world, this.combat);
     this.enemyMgr.update(sdt, this.player, this.combat);
     this.combat.update(sdt);
+    this.combat.tryPickupLoot(this.player);
     this.npcMgr.update(sdt, this.player, this.questLog);
 
     // Time of day advances (~4-min day)
     this.timeOfDay = (this.timeOfDay + dt / 240) % 1;
-    this.world.update(dt, this.timeOfDay);
+    this.world.update(dt, this.timeOfDay, this.player.pos);
 
     this.ui.update(dt, this.player, this.world, this.npcMgr);
 

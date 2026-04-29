@@ -215,10 +215,13 @@ export class World {
     const inner = new THREE.Mesh(innerGeo, innerMat);
     inner.position.copy(ring.position);
     inner.rotation.x = Math.PI / 2;
-    // Real point light so the portal actually illuminates the terrain
-    const light = new THREE.PointLight(0x5dffd1, 1.6, 22, 2);
-    light.position.set(x, y + 2.4, z);
-    const g = new THREE.Group(); g.add(ring); g.add(inner); g.add(light);
+    const g = new THREE.Group(); g.add(ring); g.add(inner);
+    let light = null;
+    if (this.quality === "high") {
+      light = new THREE.PointLight(0x5dffd1, 1.6, 22, 2);
+      light.position.set(x, y + 2.4, z);
+      g.add(light);
+    }
     this.scene.add(g);
     this.props.push({ mesh: g, type: "portal", hitR: 1.2, x, z, anim: ring, _light: light });
   }
@@ -277,9 +280,13 @@ export class World {
       const m = new THREE.Mesh(geo, mat);
       m.position.set(x, y + 0.4, z);
       m.rotation.x = Math.PI / 2;
-      const light = new THREE.PointLight(0xffd166, 1.2, 14, 2);
-      light.position.set(x, y + 0.8, z);
-      this.scene.add(m); this.scene.add(light);
+      this.scene.add(m);
+      let light = null;
+      if (this.quality === "high") {
+        light = new THREE.PointLight(0xffd166, 1.2, 14, 2);
+        light.position.set(x, y + 0.8, z);
+        this.scene.add(light);
+      }
       this.shrines.push({ x, y, z, mesh: m, light });
     }
   }

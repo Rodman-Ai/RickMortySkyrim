@@ -1033,6 +1033,194 @@ export class World {
       g.position.set(p0.x, 3.2, p0.z);
     }
 
+    // === Telescope on the porch (Rick's stargazing rig) ===
+    {
+      const tx = -10 + 1.6, tz = -8 + 4.5, ty = 0.3;
+      const g = new THREE.Group();
+      const dark = new THREE.MeshLambertMaterial({ color: 0x222233 });
+      const brass = new THREE.MeshLambertMaterial({ color: 0xc0a04a });
+      // Tripod legs
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2;
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8), dark);
+        leg.position.set(Math.cos(a) * 0.18, 0.5, Math.sin(a) * 0.18);
+        leg.rotation.z = -Math.cos(a) * 0.25;
+        leg.rotation.x = Math.sin(a) * 0.25;
+        g.add(leg);
+      }
+      // Mount + tube
+      const mount = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.1), dark);
+      mount.position.y = 1.05;
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.7, 18, 4), dark);
+      tube.rotation.z = -0.7; tube.position.set(0.05, 1.25, 0);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.02, 8, 22), brass);
+      rim.position.set(0.27, 1.45, 0); rim.rotation.y = -0.7 + Math.PI / 2;
+      const eyepiece = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.16, 12), dark);
+      eyepiece.rotation.z = -0.7 + Math.PI / 2;
+      eyepiece.position.set(-0.22, 1.05, 0);
+      g.add(mount); g.add(tube); g.add(rim); g.add(eyepiece);
+      g.position.set(tx, ty, tz);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: tx, z: tz, hitR: 0.45 });
+    }
+
+    // === Hanging flower planters off the porch railing ===
+    {
+      const houseFrontZ = -8 + 3.5;
+      const railZ = houseFrontZ + 1.4;
+      const railY = 1.18;
+      for (const xx of [-12, -10, -8]) {
+        const g = new THREE.Group();
+        // Strap
+        const strap = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.5, 6), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+        strap.position.y = -0.2;
+        // Pot (terracotta)
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.13, 0.18, 22, 2), new THREE.MeshLambertMaterial({ color: 0xb8612b }));
+        pot.position.y = -0.55;
+        // Flowers — cluster of small spheres on top
+        const colors = [0xff5577, 0xffd166, 0x97ce4c, 0xc28bff];
+        for (let i = 0; i < 6; i++) {
+          const c = colors[(i + (xx | 0)) % colors.length];
+          const flower = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 12), new THREE.MeshLambertMaterial({ color: c }));
+          const a = (i / 6) * Math.PI * 2;
+          flower.position.set(Math.cos(a) * 0.1, -0.42, Math.sin(a) * 0.1);
+          g.add(flower);
+        }
+        g.add(strap); g.add(pot);
+        g.position.set(xx, railY, railZ + 0.16);
+        this.scene.add(g);
+      }
+    }
+
+    // === Ladder leaning against the garage west wall ===
+    {
+      const lx = 8 - 4 - 0.4, lz = -10 + 0.5, ly = 0;
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0xa07a45 });
+      // Two side rails
+      const rL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 3.2, 0.06), wood);
+      rL.position.set(-0.22, 1.6, 0);
+      const rR = rL.clone(); rR.position.x = 0.22;
+      g.add(rL); g.add(rR);
+      // Rungs
+      for (let i = 0; i < 9; i++) {
+        const rung = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 0.05), wood);
+        rung.position.set(0, 0.3 + i * 0.35, 0);
+        g.add(rung);
+      }
+      g.position.set(lx, ly, lz);
+      g.rotation.x = -0.18;        // lean angle
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: lx, z: lz, hitR: 0.4 });
+    }
+
+    // === Exhaust fan on the back of the garage (animated) ===
+    {
+      const ex = 8 + 0.5, ey = 2.8, ez = -10 - 3.5 - 0.06;
+      const g = new THREE.Group();
+      const housing = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.12), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+      housing.position.set(0, 0, 0);
+      const grilleMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+      // Concentric ring grille
+      for (let r = 0.12; r < 0.42; r += 0.08) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.012, 6, 32), grilleMat);
+        ring.position.z = -0.08;
+        g.add(ring);
+      }
+      // Spinning blades
+      const blades = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.02), new THREE.MeshLambertMaterial({ color: 0x999999 }));
+        blade.rotation.y = i * Math.PI / 2;
+        blades.add(blade);
+      }
+      blades.position.z = -0.06;
+      g.add(housing); g.add(blades);
+      // Orient against the back (north) wall of the garage so it faces outward (+ -Z)
+      g.position.set(8, 2.8, -10 - 3.5 - 0.07);
+      this.scene.add(g);
+      this._smithExhaust = blades;
+    }
+
+    // === Flower bed along the front of the house ===
+    {
+      const houseFrontZ = -8 + 3.5;
+      const bedY = 0;
+      // Bed border (wooden frame)
+      const woodMat = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const bedW = 7.5, bedD = 0.8;
+      // Place south of the porch steps, between the porch and the front lawn
+      const bedCx = -10, bedCz = houseFrontZ + 3.2;
+      // Border planks
+      const front = new THREE.Mesh(new THREE.BoxGeometry(bedW, 0.18, 0.12), woodMat);
+      front.position.set(bedCx, bedY + 0.09, bedCz + bedD / 2);
+      const back = front.clone();
+      back.position.z = bedCz - bedD / 2;
+      const left = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, bedD), woodMat);
+      left.position.set(bedCx - bedW / 2, bedY + 0.09, bedCz);
+      const right = left.clone();
+      right.position.x = bedCx + bedW / 2;
+      this.scene.add(front); this.scene.add(back); this.scene.add(left); this.scene.add(right);
+      // Soil
+      const soil = new THREE.Mesh(new THREE.BoxGeometry(bedW - 0.2, 0.05, bedD - 0.2), new THREE.MeshLambertMaterial({ color: 0x4a3325 }));
+      soil.position.set(bedCx, bedY + 0.1, bedCz);
+      this.scene.add(soil);
+      // Flowers — clusters of color spheres + green stems
+      const flowerColors = [0xff5577, 0xffd166, 0x97ce4c, 0xc28bff, 0x5dffd1, 0xffaa66];
+      for (let i = 0; i < 22; i++) {
+        const fx = bedCx + (Math.random() - 0.5) * (bedW - 0.4);
+        const fz = bedCz + (Math.random() - 0.5) * (bedD - 0.3);
+        const stemH = 0.18 + Math.random() * 0.15;
+        const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, stemH, 6), new THREE.MeshLambertMaterial({ color: 0x2a6a3a }));
+        stem.position.set(fx, bedY + 0.13 + stemH / 2, fz);
+        this.scene.add(stem);
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 12), new THREE.MeshLambertMaterial({ color: flowerColors[i % flowerColors.length] }));
+        head.position.set(fx, bedY + 0.13 + stemH + 0.05, fz);
+        this.scene.add(head);
+      }
+    }
+
+    // === Hammock between two yard trees (decorative) ===
+    {
+      // Pick two posts in the lawn — drive small wooden posts and hammock between them
+      const ax = -6, az = 9, bx = -2, bz = 9;
+      const ay = 0, by = 0;
+      const woodMat = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const fab = new THREE.MeshLambertMaterial({ color: 0xff8866, side: THREE.DoubleSide });
+      // Posts
+      const postA = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.5, 14, 3), woodMat);
+      postA.position.set(ax, 0.75, az);
+      const postB = postA.clone();
+      postB.position.set(bx, 0.75, bz);
+      this.scene.add(postA); this.scene.add(postB);
+      // Hammock — sagging plane between posts
+      const dx = bx - ax, dz = bz - az;
+      const dist = Math.hypot(dx, dz);
+      const segs = 12;
+      const hamGeo = new THREE.PlaneGeometry(dist, 0.7, segs, 1);
+      const pos = hamGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const u = (pos.getX(i) + dist / 2) / dist;
+        const sag = -Math.sin(u * Math.PI) * 0.35;
+        pos.setY(i, pos.getY(i) + sag);
+      }
+      hamGeo.computeVertexNormals();
+      const ham = new THREE.Mesh(hamGeo, fab);
+      ham.position.set((ax + bx) / 2, 1.05, (az + bz) / 2);
+      ham.rotation.y = Math.atan2(dz, dx);
+      this.scene.add(ham);
+      // Anchor ropes
+      const ropeMat = new THREE.MeshLambertMaterial({ color: 0xf0e0c0 });
+      for (const [px, pz] of [[ax, az], [bx, bz]]) {
+        const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.4, 6), ropeMat);
+        rope.position.set(px, 1.25, pz);
+        this.scene.add(rope);
+      }
+      // Treat posts as cylinder colliders
+      this.props.push({ mesh: postA, type: "smith", x: ax, z: az, hitR: 0.15 });
+      this.props.push({ mesh: postB, type: "smith", x: bx, z: bz, hitR: 0.15 });
+    }
+
     // === Ambient characters from the show ===
     this._buildAmbientCharacters();
 
@@ -1359,6 +1547,57 @@ export class World {
       this.scene.add(web);
     }
 
+    // === Game console + two controllers on living-room floor ===
+    {
+      const cnsX = cx + 0.4, cnsZ = cz - 1.2;
+      const console_ = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.07, 0.32), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      console_.position.set(cnsX, cy + 0.105, cnsZ);
+      this.scene.add(console_);
+      // power LED
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.018, 14, 10), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
+      led.position.set(cnsX + 0.15, cy + 0.145, cnsZ + 0.18);
+      this.scene.add(led);
+      // Two controllers
+      for (let i = 0; i < 2; i++) {
+        const ctlBody = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.05, 0.13), new THREE.MeshLambertMaterial({ color: 0x222233 }));
+        const cox = cnsX + (i ? 0.45 : -0.4) + (Math.random() - 0.5) * 0.05;
+        const coz = cnsZ + 0.45 + (Math.random() - 0.5) * 0.1;
+        ctlBody.position.set(cox, cy + 0.085, coz);
+        ctlBody.rotation.y = (Math.random() - 0.5) * 1.0;
+        // sticks
+        for (const sx of [-0.06, 0.06]) {
+          const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.04, 10), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+          stick.position.set(sx, 0.045, 0);
+          ctlBody.add(stick);
+        }
+        // a couple of buttons
+        for (const [bx, bz, color] of [[0.06, -0.02, 0xff5577], [0.08, 0.02, 0x97ce4c]]) {
+          const btn = new THREE.Mesh(new THREE.SphereGeometry(0.012, 12, 10), new THREE.MeshBasicMaterial({ color }));
+          btn.position.set(bx, 0.04, bz);
+          ctlBody.add(btn);
+        }
+        this.scene.add(ctlBody);
+      }
+      // Cable to TV (a thin curve approximated as a slim cylinder)
+      const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 1.2, 6), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      cable.rotation.z = Math.PI / 2;
+      cable.position.set(cnsX + 0.6, cy + 0.07, cnsZ - 0.4);
+      this.scene.add(cable);
+    }
+
+    // === Smoke detector with blinking LED on the ceiling ===
+    {
+      const sx = cx + 1.6, sz = cz + 1.2;
+      const housing = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.06, 22, 2), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
+      housing.position.set(sx, cy + 3.0 - 0.03, sz);
+      this.scene.add(housing);
+      const ledMat = new THREE.MeshBasicMaterial({ color: 0xff3344 });
+      const led = new THREE.Mesh(new THREE.SphereGeometry(0.02, 18, 14), ledMat);
+      led.position.set(sx + 0.07, cy + 3.0 - 0.05, sz);
+      this.scene.add(led);
+      this._smithSmokeLED = ledMat;
+    }
+
     // === Pizza boxes stacked on the coffee table ===
     {
       const ctableX = cx + 0.4, ctableZ = cz, ctableTop = cy + 0.06 + 0.5 + 0.04;
@@ -1576,6 +1815,71 @@ export class World {
       this.props.push({ mesh: stack, type: "smith", x: tx, z: tz, hitR: 0.5 });
     }
 
+    // === Dartboard mounted on the east wall of the garage ===
+    {
+      const dx = cx + w / 2 - 0.06, dy = cy + 1.9, dz = cz - 1.6;
+      // Concentric rings: outer black, mid green/red alternating, bullseye
+      const board = new THREE.Group();
+      const layers = [
+        { r: 0.45, color: 0x111111 },
+        { r: 0.36, color: 0xeeeeee },
+        { r: 0.30, color: 0x3a6f3a },
+        { r: 0.22, color: 0xc91d1d },
+        { r: 0.14, color: 0x3a6f3a },
+        { r: 0.08, color: 0xc91d1d },
+        { r: 0.04, color: 0x111111 },
+      ];
+      for (const L of layers) {
+        const m = new THREE.Mesh(new THREE.CircleGeometry(L.r, 32), new THREE.MeshLambertMaterial({ color: L.color }));
+        m.position.set(0, 0, board.children.length * 0.0005); // tiny offsets to avoid z-fight
+        board.add(m);
+      }
+      // Three darts stuck near the center
+      const dartFlight = new THREE.MeshLambertMaterial({ color: 0xffd166 });
+      const dartBody = new THREE.MeshLambertMaterial({ color: 0xc0c0c0 });
+      for (let i = 0; i < 3; i++) {
+        const ang = i * 1.2;
+        const r = 0.06 + i * 0.04;
+        const dartGroup = new THREE.Group();
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.18, 8), dartBody);
+        shaft.rotation.x = Math.PI / 2; shaft.position.z = 0.09;
+        const flight = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.1, 8), dartFlight);
+        flight.rotation.x = Math.PI / 2; flight.position.z = 0.22;
+        dartGroup.add(shaft); dartGroup.add(flight);
+        dartGroup.position.set(Math.cos(ang) * r, Math.sin(ang) * r, 0.005);
+        board.add(dartGroup);
+      }
+      board.position.set(dx, dy, dz);
+      board.rotation.y = -Math.PI / 2;
+      this.scene.add(board);
+    }
+
+    // === Holographic rotating molecule in Rick's chemistry corner ===
+    {
+      // Floating above the lab bench; teal emitter ring + nucleus + orbiting electron spheres
+      const baseX = cx - w / 2 + 1.1, baseY = cy + 0.05 + 1.0, baseZ = cz - d / 2 + 0.4;
+      const emitter = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.05, 22), new THREE.MeshLambertMaterial({ color: 0x222244, emissive: 0x5dffd1, emissiveIntensity: 0.6 }));
+      emitter.position.set(baseX + 1.1, baseY, baseZ + 0.25);
+      this.scene.add(emitter);
+      // Hologram group above emitter
+      const holo = new THREE.Group();
+      const nucleus = new THREE.Mesh(new THREE.SphereGeometry(0.12, 32, 24), new THREE.MeshBasicMaterial({ color: 0x97ffd1, transparent: true, opacity: 0.6 }));
+      holo.add(nucleus);
+      const electronMat = new THREE.MeshBasicMaterial({ color: 0x5dffd1, transparent: true, opacity: 0.7 });
+      const electrons = [];
+      for (let i = 0; i < 3; i++) {
+        const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 22, 18), electronMat);
+        holo.add(e);
+        electrons.push({ mesh: e, baseAng: i * (Math.PI * 2 / 3), tiltAxis: i % 3 });
+      }
+      holo.position.set(baseX + 1.1, baseY + 0.55, baseZ + 0.25);
+      this.scene.add(holo);
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.16, 0.6, 22, 1, true), new THREE.MeshBasicMaterial({ color: 0x5dffd1, transparent: true, opacity: 0.18, side: THREE.DoubleSide }));
+      beam.position.set(baseX + 1.1, baseY + 0.3, baseZ + 0.25);
+      this.scene.add(beam);
+      this._smithHolo = { holo, nucleus, electrons, t: 0 };
+    }
+
     // === Hanging fluorescent tube lights ===
     {
       const tubeMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.95 });
@@ -1710,23 +2014,23 @@ export class World {
       this._ambient.push({ mesh: s, type: "walk", path, target: 1, speed: 1.6, walkPhase: 0 });
     }
 
-    // Squanchy — the cat, sleeping on the rug. Polygons boosted ~5x.
+    // Squanchy — the cat, sleeping on the rug. Polygons boosted ~25x total.
     {
       const g = new THREE.Group();
       const fur = new THREE.MeshLambertMaterial({ color: 0x998866 });
       const stripe = new THREE.MeshLambertMaterial({ color: 0x665544 });
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 28, 18), fur);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 62, 40), fur);
       body.scale.set(1.6, 0.7, 0.9);
       body.position.y = 0.18;
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 22, 18), fur);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 49, 40), fur);
       head.position.set(0.4, 0.22, 0);
-      const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 14), fur);
+      const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 32), fur);
       ear1.position.set(0.45, 0.4, 0.1);
       const ear2 = ear1.clone(); ear2.position.z = -0.1;
-      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.5, 18, 4), stripe);
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.5, 40, 9), stripe);
       tail.rotation.z = -Math.PI / 3; tail.position.set(-0.45, 0.25, 0);
       for (const sz of [-0.06, 0.06]) {
-        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 14, 14), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 32, 32), new THREE.MeshBasicMaterial({ color: 0x000000 }));
         eye.position.set(0.52, 0.24, sz);
         g.add(eye);
       }
@@ -1739,20 +2043,20 @@ export class World {
       this._ambient.push({ mesh: g, type: "sleep", phase: Math.random() * 5 });
     }
 
-    // Snuffles — the dog, patrolling the yard. Boxes upgraded with segment counts (~5x triangles).
+    // Snuffles — the dog, patrolling the yard. Box segment counts boosted ~25x total.
     {
       const g = new THREE.Group();
-      const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35, 5, 4, 4), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.35, 12, 9, 9), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       body.position.y = 0.3;
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3, 4, 4, 4), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3, 9, 9, 9), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       head.position.set(0.4, 0.45, 0);
-      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.1, 2, 4, 2), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+      const ear1 = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.18, 0.1, 5, 9, 5), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
       ear1.position.set(0.42, 0.65, 0.12);
       const ear2 = ear1.clone(); ear2.position.z = -0.12;
-      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06, 6, 2, 2), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.06, 0.06, 14, 5, 5), new THREE.MeshLambertMaterial({ color: 0xc7a060 }));
       tail.position.set(-0.45, 0.45, 0); tail.rotation.z = 0.4;
       for (const [px, pz] of [[0.25, 0.13], [0.25, -0.13], [-0.25, 0.13], [-0.25, -0.13]]) {
-        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08, 2, 4, 2), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.25, 0.08, 5, 9, 5), new THREE.MeshLambertMaterial({ color: 0x886a30 }));
         leg.position.set(px, 0.13, pz);
         g.add(leg);
       }
@@ -1767,16 +2071,16 @@ export class World {
   }
 
   _makeHumanoid({ shirt = 0x888888, hair = 0x553322, skin = 0xfdd6b5 } = {}) {
-    // Polygon counts boosted ~5x.
+    // Polygon counts boosted ~25x total over baseline.
     const g = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 18, 4), new THREE.MeshLambertMaterial({ color: shirt }));
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 40, 9), new THREE.MeshLambertMaterial({ color: shirt }));
     body.position.y = 0.7;
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 28, 22), new THREE.MeshLambertMaterial({ color: skin }));
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 62, 49), new THREE.MeshLambertMaterial({ color: skin }));
     head.position.y = 1.7;
-    const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: hair }));
+    const hairMesh = new THREE.Mesh(new THREE.SphereGeometry(0.38, 62, 40, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: hair }));
     hairMesh.position.y = 1.75;
     for (const sx of [-0.12, 0.12]) {
-      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 14), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+      const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 32, 32), new THREE.MeshBasicMaterial({ color: 0x111111 }));
       e.position.set(sx, 1.75, 0.3);
       g.add(e);
     }
@@ -1947,6 +2251,34 @@ export class World {
     // Ceiling fan rotation
     if (this._smithFan) {
       this._smithFan.rotor.rotation.y += dt * 4.0;
+    }
+
+    // Garage exhaust fan blades spin
+    if (this._smithExhaust) {
+      this._smithExhaust.rotation.z += dt * 8;
+    }
+
+    // Smoke detector LED blink
+    if (this._smithSmokeLED) {
+      const blink = (Math.sin(t * 1.6) > 0.95) ? 1.0 : 0.15;
+      this._smithSmokeLED.color.setRGB(1.0 * blink, 0.18 * blink, 0.22 * blink);
+    }
+
+    // Holographic molecule — rotate nucleus + orbit electrons on tilted rings
+    if (this._smithHolo) {
+      const h = this._smithHolo;
+      h.t += dt;
+      h.holo.rotation.y = h.t * 0.6;
+      h.nucleus.rotation.y = h.t * 1.6;
+      h.nucleus.rotation.x = h.t * 0.9;
+      const r = 0.32;
+      for (const e of h.electrons) {
+        const a = h.t * 2.5 + e.baseAng;
+        const ex = Math.cos(a) * r;
+        const ey = Math.sin(a) * r * (e.tiltAxis === 0 ? 0.4 : 1);
+        const ez = Math.sin(a) * r * (e.tiltAxis === 1 ? 0.4 : 1);
+        e.mesh.position.set(ex, ey, ez);
+      }
     }
 
     // Patrol drone — fly along path with rotor spin and gentle bobbing

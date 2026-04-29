@@ -4,22 +4,23 @@ import { heightAt } from "./world.js";
 import { NPCS } from "./data.js";
 
 function makeNPC(npc) {
-  // Polygon counts boosted ~5x: cylinder radial 8→18 + 4 height segs;
-  // spheres width/height 12,10 → 28,22 (and 12,8 → 28,18); cone 6 → 24; eyes 6,6 → 14,14.
+  // Polygon counts boosted ~25x total over baseline.
+  // Cylinder radial 18→40 + height 4→9; spheres 28,22→62,49 and 28,18→62,40;
+  // eyes 14→32; cone 24→54.
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 18, 4), new THREE.MeshLambertMaterial({ color: npc.color || 0xffaa88 }));
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.45, 1.4, 40, 9), new THREE.MeshLambertMaterial({ color: npc.color || 0xffaa88 }));
   body.position.y = 1.0;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 28, 22), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.35, 62, 49), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
   head.position.y = 2.0;
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.38, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: npc.hairColor || 0x553322 }));
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.38, 62, 40, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshLambertMaterial({ color: npc.hairColor || 0x553322 }));
   hair.position.y = 2.05;
   for (const sx of [-0.12, 0.12]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 14, 14), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+    const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 32, 32), new THREE.MeshBasicMaterial({ color: 0x111111 }));
     e.position.set(sx, 2.05, 0.3);
     g.add(e);
   }
   if (npc.id === "birdperson") {
-    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 24), new THREE.MeshLambertMaterial({ color: 0xddaa55 }));
+    const beak = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 54), new THREE.MeshLambertMaterial({ color: 0xddaa55 }));
     beak.position.set(0, 1.95, 0.45);
     beak.rotation.x = Math.PI / 2;
     g.add(beak);

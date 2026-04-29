@@ -635,6 +635,192 @@ export class World {
       this.scene.add(addr);
     }
 
+    // === Concrete driveway from gate to garage ===
+    {
+      const cementMat = new THREE.MeshLambertMaterial({ color: 0x8e8e8c });
+      const drive = new THREE.Mesh(new THREE.PlaneGeometry(4.2, 22), cementMat);
+      drive.rotation.x = -Math.PI / 2;
+      // Curve isn't easy with a plane, so we lay it as a long rectangle aimed from the gap to the garage
+      const startZ = 16, endZ = -8;
+      const cx = 4, cz = (startZ + endZ) / 2;
+      drive.position.set(cx, heightAt(cx, cz) + 0.04, cz);
+      this.scene.add(drive);
+      // Cracks — thin dark lines on the slab
+      for (let i = 0; i < 6; i++) {
+        const crackMat = new THREE.MeshBasicMaterial({ color: 0x222222, transparent: true, opacity: 0.7 });
+        const w = 0.04, len = 0.6 + Math.random() * 1.2;
+        const crack = new THREE.Mesh(new THREE.PlaneGeometry(w, len), crackMat);
+        crack.rotation.x = -Math.PI / 2;
+        crack.rotation.z = Math.random() * Math.PI;
+        const cx2 = cx + (Math.random() - 0.5) * 3.6;
+        const cz2 = cz + (Math.random() - 0.5) * 18;
+        crack.position.set(cx2, heightAt(cx2, cz2) + 0.05, cz2);
+        this.scene.add(crack);
+      }
+    }
+
+    // === Smith family sedan in the driveway ===
+    {
+      const sxc = 4, szc = 4, syc = heightAt(sxc, szc);
+      const g = new THREE.Group();
+      const bodyMat = new THREE.MeshLambertMaterial({ color: 0x6a3a3a, flatShading: true });
+      const glassMat = new THREE.MeshLambertMaterial({ color: 0x223344 });
+      const tireMat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+      const trimMat = new THREE.MeshLambertMaterial({ color: 0xc0c0c0 });
+      // Lower body
+      const lower = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.6, 4.2), bodyMat);
+      lower.position.y = 0.7;
+      // Cabin (slightly narrower, recessed at front/back)
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.6, 2.4), bodyMat);
+      cabin.position.set(0, 1.2, -0.1);
+      // Windshield + rear window
+      const ws = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 0.06), glassMat);
+      ws.position.set(0, 1.25, 1.05); ws.rotation.x = -0.35;
+      const rw = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.55, 0.06), glassMat);
+      rw.position.set(0, 1.25, -1.25); rw.rotation.x = 0.4;
+      // Side windows
+      const sw1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 2.2), glassMat);
+      sw1.position.set(0.86, 1.25, -0.1);
+      const sw2 = sw1.clone(); sw2.position.x = -0.86;
+      // Wheels
+      for (const [wx, wz] of [[0.95, 1.4], [-0.95, 1.4], [0.95, -1.5], [-0.95, -1.5]]) {
+        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.3, 14), tireMat);
+        wheel.rotation.z = Math.PI / 2;
+        wheel.position.set(wx, 0.36, wz);
+        g.add(wheel);
+        const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.32, 12), trimMat);
+        cap.rotation.z = Math.PI / 2;
+        cap.position.set(wx, 0.36, wz);
+        g.add(cap);
+      }
+      // Headlights + taillights
+      for (const [lx, lz, color] of [[0.6, 2.05, 0xfff5b8], [-0.6, 2.05, 0xfff5b8], [0.6, -2.05, 0xff3344], [-0.6, -2.05, 0xff3344]]) {
+        const light = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.06), new THREE.MeshBasicMaterial({ color }));
+        light.position.set(lx, 0.85, lz);
+        g.add(light);
+      }
+      // Side mirrors
+      for (const sx of [-0.95, 0.95]) {
+        const mir = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.12, 0.18), bodyMat);
+        mir.position.set(sx, 1.15, 0.6);
+        g.add(mir);
+      }
+      g.add(lower); g.add(cabin); g.add(ws); g.add(rw); g.add(sw1); g.add(sw2);
+      g.position.set(sxc, syc, szc);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: sxc, z: szc, hitR: 2.4 });
+    }
+
+    // === BBQ grill on the side yard ===
+    {
+      const bx = -16, bz = 4, by = heightAt(bx, bz);
+      const g = new THREE.Group();
+      const black = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.45, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), black);
+      dome.position.y = 1.0;
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.4, 0.3, 14), black);
+      bowl.position.y = 0.85;
+      // Legs
+      for (const [lx, lz] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.85, 6), black);
+        leg.position.set(lx, 0.42, lz);
+        g.add(leg);
+      }
+      // Side shelf
+      const shelf = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.4), new THREE.MeshLambertMaterial({ color: 0x666666 }));
+      shelf.position.set(0.7, 0.85, 0);
+      // Propane tank
+      const tank = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.5, 12), new THREE.MeshLambertMaterial({ color: 0xc4a017 }));
+      tank.position.set(0, 0.25, -0.6);
+      g.add(dome); g.add(bowl); g.add(shelf); g.add(tank);
+      g.position.set(bx, by, bz);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: bx, z: bz, hitR: 0.8 });
+    }
+
+    // === Patio table with umbrella + chairs ===
+    {
+      const px = -16, pz = -2, py = heightAt(px, pz);
+      const g = new THREE.Group();
+      const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a });
+      const fab = new THREE.MeshLambertMaterial({ color: 0x447766, flatShading: true });
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.7, 0.05, 16), wood);
+      top.position.y = 0.75;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.75, 8), wood);
+      stem.position.y = 0.38;
+      const umbrellaPole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.6, 6), wood);
+      umbrellaPole.position.y = 1.55;
+      const umbrella = new THREE.Mesh(new THREE.ConeGeometry(1.1, 0.5, 12, 1, true), fab);
+      umbrella.position.y = 2.1;
+      // Chairs
+      for (const [chx, chz] of [[0.0, 1.2], [0.0, -1.2]]) {
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.06, 0.5), wood);
+        seat.position.set(chx, 0.45, chz);
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.55, 0.06), wood);
+        back.position.set(chx, 0.74, chz + (chz > 0 ? 0.22 : -0.22));
+        const legM = new THREE.MeshLambertMaterial({ color: 0x222222 });
+        for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) {
+          const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.45, 6), legM);
+          leg.position.set(chx + lx, 0.22, chz + lz);
+          g.add(leg);
+        }
+        g.add(seat); g.add(back);
+      }
+      g.add(top); g.add(stem); g.add(umbrellaPole); g.add(umbrella);
+      g.position.set(px, py, pz);
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "smith", x: px, z: pz, hitR: 1.4 });
+    }
+
+    // === Trash bins behind the house ===
+    {
+      const baseX = -11, baseZ = -12.6;
+      const bins = [
+        { offX: 0,    color: 0x2a2a2a },   // black trash
+        { offX: 1.0,  color: 0x2a6a4a },   // green recycling
+        { offX: 2.0,  color: 0x2a4a8a },   // blue recycling
+      ];
+      for (const b of bins) {
+        const bx = baseX + b.offX, bz = baseZ;
+        const by = heightAt(bx, bz);
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.4, 1.0, 12), new THREE.MeshLambertMaterial({ color: b.color }));
+        body.position.y = 0.5;
+        const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.06, 12), new THREE.MeshLambertMaterial({ color: b.color }));
+        lid.position.y = 1.05;
+        g.add(body); g.add(lid);
+        g.position.set(bx, by, bz);
+        this.scene.add(g);
+        this.props.push({ mesh: g, type: "smith", x: bx, z: bz, hitR: 0.45 });
+      }
+    }
+
+    // === Apple tree (yard, NE area) ===
+    {
+      const tx = 14, tz = 4, ty = heightAt(tx, tz);
+      const g = new THREE.Group();
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.55, 4.5, 8), new THREE.MeshLambertMaterial({ color: 0x4a3a2a }));
+      trunk.position.set(tx, ty + 2.25, tz);
+      const canopy = new THREE.Mesh(new THREE.IcosahedronGeometry(2.6, 1), new THREE.MeshLambertMaterial({ color: 0x44a04a, flatShading: true }));
+      canopy.position.set(tx, ty + 5.0, tz);
+      g.add(trunk); g.add(canopy);
+      const appleMat = new THREE.MeshLambertMaterial({ color: 0xc9261f });
+      for (let i = 0; i < 14; i++) {
+        const phi = Math.acos(2 * Math.random() - 1);
+        const theta = Math.random() * Math.PI * 2;
+        const r = 2.4 + Math.random() * 0.3;
+        const ax = Math.sin(phi) * Math.cos(theta) * r;
+        const ay = Math.cos(phi) * r * 0.6;
+        const az = Math.sin(phi) * Math.sin(theta) * r;
+        const apple = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 6), appleMat);
+        apple.position.set(tx + ax, ty + 5.0 + ay, tz + az);
+        g.add(apple);
+      }
+      this.scene.add(g);
+      this.props.push({ mesh: g, type: "tree", x: tx, z: tz, hitR: 0.7,
+                        _leaves: canopy, _swayPhase: Math.random() * Math.PI * 2 });
+    }
+
     // === Lawn ornaments (flamingo + gnome) ===
     {
       // Pink flamingo near the porch
@@ -767,26 +953,79 @@ export class World {
       this._smithTV = { mat: screenMat, baseColor: 0x55c5e5 };
     }
 
-    // Fridge in NW corner
+    // Fridge in NW corner with photo magnets on the door
     {
+      const fx = cx - w / 2 + 0.55, fy = cy + 0.95, fz = cz - d / 2 + 0.5;
       const fridge = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.8, 0.8), new THREE.MeshLambertMaterial({ color: 0xeeeeee }));
-      fridge.position.set(cx - w / 2 + 0.55, cy + 0.95, cz - d / 2 + 0.5);
+      fridge.position.set(fx, fy, fz);
       this.scene.add(fridge);
       const door = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.6, 0.7), new THREE.MeshLambertMaterial({ color: 0xdddddd }));
-      door.position.set(cx - w / 2 + 0.55 + 0.45, cy + 0.95, cz - d / 2 + 0.5);
+      door.position.set(fx + 0.45, fy, fz);
       this.scene.add(door);
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.5, 0.04), new THREE.MeshLambertMaterial({ color: 0xc0c0c0 }));
+      handle.position.set(fx + 0.5, fy + 0.4, fz - 0.28);
+      this.scene.add(handle);
+      // Photo magnets — small bright squares stuck to the door
+      const magColors = [0xff5577, 0xffd166, 0x97ce4c, 0x5dffd1, 0xc28bff, 0xffaa66];
+      for (let i = 0; i < 8; i++) {
+        const c = magColors[i % magColors.length];
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.16), new THREE.MeshBasicMaterial({ color: c }));
+        m.position.set(
+          fx + 0.48,
+          fy + 0.4 + (Math.random() - 0.5) * 1.0,
+          fz + (Math.random() - 0.5) * 0.55
+        );
+        m.rotation.y = -Math.PI / 2;
+        m.rotation.z = (Math.random() - 0.5) * 0.4;
+        this.scene.add(m);
+      }
     }
 
-    // Stove next to fridge
+    // Stove next to fridge — with pots and a hanging utensil rack above
     {
       const g = new THREE.Group();
       const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.0, 0.7), new THREE.MeshLambertMaterial({ color: 0x888888 }));
       body.position.y = 0.5;
       const top = new THREE.Mesh(new THREE.BoxGeometry(0.92, 0.05, 0.72), new THREE.MeshBasicMaterial({ color: 0x222222 }));
       top.position.y = 1.02;
-      g.add(body); g.add(top);
+      // 4 burners
+      for (const [bx, bz] of [[-0.22, 0.18], [0.22, 0.18], [-0.22, -0.18], [0.22, -0.18]]) {
+        const burner = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.02, 14), new THREE.MeshBasicMaterial({ color: 0x4a3a2a }));
+        burner.position.set(bx, 1.05, bz);
+        g.add(burner);
+      }
+      // Pots on the stovetop
+      const pot1 = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.14, 0.18, 14), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      pot1.position.set(-0.22, 1.16, 0.18);
+      const lid1 = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.04, 14), new THREE.MeshLambertMaterial({ color: 0x4a4a4a }));
+      lid1.position.set(-0.22, 1.27, 0.18);
+      const handle = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 6), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+      handle.position.set(-0.22, 1.31, 0.18);
+      const pan = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.16, 0.06, 14), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      pan.position.set(0.22, 1.08, -0.18);
+      const panHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.4, 6), new THREE.MeshLambertMaterial({ color: 0x111111 }));
+      panHandle.rotation.z = Math.PI / 2; panHandle.position.set(0.5, 1.08, -0.18);
+      // Knobs on the front face
+      for (const kx of [-0.3, -0.1, 0.1, 0.3]) {
+        const kn = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8), new THREE.MeshLambertMaterial({ color: 0x222222 }));
+        kn.rotation.x = Math.PI / 2; kn.position.set(kx, 0.85, 0.36);
+        g.add(kn);
+      }
+      g.add(body); g.add(top); g.add(pot1); g.add(lid1); g.add(handle); g.add(pan); g.add(panHandle);
       g.position.set(cx - w / 2 + 1.55, cy + 0.05, cz - d / 2 + 0.5);
       this.scene.add(g);
+
+      // Hanging utensil rack above the stove
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.0, 8), new THREE.MeshLambertMaterial({ color: 0xc0c0c0 }));
+      rod.rotation.z = Math.PI / 2;
+      rod.position.set(cx - w / 2 + 1.55, cy + 0.05 + 1.9, cz - d / 2 + 0.18);
+      this.scene.add(rod);
+      const utensilColors = [0xc0c0c0, 0x222222, 0x999999];
+      for (let i = 0; i < 4; i++) {
+        const u = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.4, 0.02), new THREE.MeshLambertMaterial({ color: utensilColors[i % utensilColors.length] }));
+        u.position.set(cx - w / 2 + 1.2 + i * 0.22, cy + 0.05 + 1.7, cz - d / 2 + 0.18);
+        this.scene.add(u);
+      }
     }
 
     // Floor lamp in NE corner
@@ -1011,6 +1250,48 @@ export class World {
     // Floor clutter
     this._scatterClutter(cx, cy, cz, w, d, "garage");
 
+    // === Rick's chemistry lab corner (NW corner of garage) with bubbling beakers ===
+    {
+      // Lab bench
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.05, 0.7), new THREE.MeshLambertMaterial({ color: 0x444444 }));
+      bench.position.set(cx - w / 2 + 1.1, cy + 0.05 + 0.95, cz - d / 2 + 0.4);
+      this.scene.add(bench);
+      const apron = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.9, 0.7), new THREE.MeshLambertMaterial({ color: 0x6b3f2a }));
+      apron.position.set(cx - w / 2 + 1.1, cy + 0.05 + 0.5, cz - d / 2 + 0.4);
+      this.scene.add(apron);
+      this.props.push({ mesh: bench, type: "smith", x: bench.position.x, z: bench.position.z, hitR: 1.1 });
+
+      // Beakers (one for animation reference)
+      const beakerColors = [0x97ce4c, 0xff8844, 0x5db8e0];
+      this._smithBeakers = [];
+      for (let i = 0; i < 3; i++) {
+        const beaker = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.1, 0.4, 16), new THREE.MeshLambertMaterial({ color: 0xddffff, transparent: true, opacity: 0.55 }));
+        const bx = cx - w / 2 + 0.35 + i * 0.35;
+        const bz = cz - d / 2 + 0.4;
+        const by = cy + 0.05 + 0.95 + 0.20;
+        beaker.position.set(bx, by, bz);
+        const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.09, 0.28, 16), new THREE.MeshLambertMaterial({ color: beakerColors[i], emissive: beakerColors[i], emissiveIntensity: 0.4 }));
+        liquid.position.set(bx, by - 0.05, bz);
+        this.scene.add(beaker); this.scene.add(liquid);
+        this._smithBeakers.push({ x: bx, y: by + 0.15, z: bz, color: beakerColors[i], t: Math.random() * 5 });
+      }
+      // Erlenmeyer flask (taller, conical)
+      const flask = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.4, 14, 1, true), new THREE.MeshLambertMaterial({ color: 0xddffff, transparent: true, opacity: 0.45, side: THREE.DoubleSide }));
+      flask.position.set(cx - w / 2 + 1.6, cy + 0.05 + 0.95 + 0.20, cz - d / 2 + 0.4);
+      flask.rotation.x = Math.PI;
+      this.scene.add(flask);
+      // Test-tube rack
+      const rack = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.16), new THREE.MeshLambertMaterial({ color: 0x6b3f2a }));
+      rack.position.set(cx - w / 2 + 1.85, cy + 0.05 + 0.95 + 0.09, cz - d / 2 + 0.3);
+      this.scene.add(rack);
+      for (let i = 0; i < 4; i++) {
+        const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.22, 8), new THREE.MeshLambertMaterial({ color: [0xff5577, 0x97ce4c, 0xffd166, 0x5dffd1][i] }));
+        tube.position.set(cx - w / 2 + 1.71 + i * 0.09, cy + 0.05 + 0.95 + 0.20, cz - d / 2 + 0.3);
+        this.scene.add(tube);
+      }
+      this._smithBeakers.bubblePool = [];
+    }
+
     // === Hanging fluorescent tube lights ===
     {
       const tubeMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.95 });
@@ -1143,6 +1424,36 @@ export class World {
       s.position.set(path[0].x, heightAt(path[0].x, path[0].z), path[0].z);
       this.scene.add(s);
       this._ambient.push({ mesh: s, type: "walk", path, target: 1, speed: 1.6, walkPhase: 0 });
+    }
+
+    // Squanchy — the cat, sleeping on the rug inside the house
+    {
+      const g = new THREE.Group();
+      const fur = new THREE.MeshLambertMaterial({ color: 0x998866 });
+      const stripe = new THREE.MeshLambertMaterial({ color: 0x665544 });
+      const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), fur);
+      body.scale.set(1.6, 0.7, 0.9);
+      body.position.y = 0.18;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.18, 10, 8), fur);
+      head.position.set(0.4, 0.22, 0);
+      const ear1 = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 6), fur);
+      ear1.position.set(0.45, 0.4, 0.1);
+      const ear2 = ear1.clone(); ear2.position.z = -0.1;
+      const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.5, 8), stripe);
+      tail.rotation.z = -Math.PI / 3; tail.position.set(-0.45, 0.25, 0);
+      // Two black eye dots
+      for (const sz of [-0.06, 0.06]) {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 6), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+        eye.position.set(0.52, 0.24, sz);
+        g.add(eye);
+      }
+      g.add(body); g.add(head); g.add(ear1); g.add(ear2); g.add(tail);
+      // Place on the rug (rug is at center of house)
+      const houseCx = -10, houseCz = -8, houseFy = heightAt(houseCx, houseCz);
+      g.position.set(houseCx + 0.2, houseFy + 0.07, houseCz - 0.4);
+      g.rotation.y = 0.6;
+      this.scene.add(g);
+      this._ambient.push({ mesh: g, type: "sleep", phase: Math.random() * 5 });
     }
 
     // Snuffles — the dog, patrolling the yard
@@ -1355,6 +1666,32 @@ export class World {
       this._smithFan.rotor.rotation.y += dt * 4.0;
     }
 
+    // Beaker bubbles — rise from each beaker's liquid surface
+    if (this._smithBeakers) {
+      for (const b of this._smithBeakers) {
+        b.t -= dt;
+        if (b.t <= 0) {
+          b.t = 0.25 + Math.random() * 0.4;
+          const mat = new THREE.MeshBasicMaterial({ color: b.color, transparent: true, opacity: 0.9 });
+          const m = new THREE.Mesh(new THREE.SphereGeometry(0.04 + Math.random() * 0.04, 6, 5), mat);
+          m.position.set(b.x + (Math.random() - 0.5) * 0.05, b.y, b.z + (Math.random() - 0.5) * 0.05);
+          this.scene.add(m);
+          this._smithBeakers.bubblePool.push({ mesh: m, mat, vy: 0.4 + Math.random() * 0.4, life: 0, ttl: 1.0 });
+        }
+      }
+      const pool = this._smithBeakers.bubblePool;
+      for (let i = pool.length - 1; i >= 0; i--) {
+        const p = pool[i];
+        p.life += dt;
+        p.mesh.position.y += p.vy * dt;
+        p.mat.opacity = Math.max(0, 0.9 * (1 - p.life / p.ttl));
+        if (p.life >= p.ttl) {
+          this.scene.remove(p.mesh);
+          pool.splice(i, 1);
+        }
+      }
+    }
+
     // CRT screen subtle flicker
     if (this._smithCRT) {
       const k = 0.8 + 0.2 * Math.sin(t * 18 + Math.sin(t * 3) * 4);
@@ -1386,6 +1723,13 @@ export class World {
           a.phase += dt;
           a.mesh.position.y = (a.mesh.userData.baseY ??= a.mesh.position.y) + Math.sin(a.phase * 1.4) * 0.02;
           a.mesh.rotation.y += Math.sin(a.phase * 0.8) * dt * 0.3;
+        } else if (a.type === "sleep") {
+          // Cat breathing — scale belly slightly + subtle tail twitch
+          a.phase += dt;
+          const k = 1 + Math.sin(a.phase * 1.1) * 0.04;
+          a.mesh.scale.set(k, k, k);
+          // Tail is the 4th-to-last child added; safely twitch the whole mesh slightly
+          a.mesh.rotation.z = Math.sin(a.phase * 0.6) * 0.04;
         } else if (a.type === "walk") {
           const tgt = a.path[a.target];
           const dx = tgt.x - a.mesh.position.x, dz = tgt.z - a.mesh.position.z;

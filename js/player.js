@@ -33,14 +33,11 @@ function buildPlasmaRifleModel() {
   const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.08, 10), new THREE.MeshBasicMaterial({ color: 0x97ce4c }));
   tip.rotation.x = Math.PI / 2;
   tip.position.set(0.02, 0.0, 0.6);
-  // glow point
-  const glow = new THREE.PointLight(0x97ce4c, 0.8, 3, 2);
-  glow.position.copy(tip.position);
   const grip = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.18, 0.1), new THREE.MeshLambertMaterial({ color: 0x222233 }));
   grip.position.set(0, -0.18, 0.05);
   const hand = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), new THREE.MeshLambertMaterial({ color: 0xfdd6b5 }));
   hand.position.set(0, -0.28, 0.05);
-  g.add(stock); g.add(barrel); g.add(tip); g.add(glow); g.add(grip); g.add(hand);
+  g.add(stock); g.add(barrel); g.add(tip); g.add(grip); g.add(hand);
   return g;
 }
 

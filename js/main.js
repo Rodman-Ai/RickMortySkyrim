@@ -312,17 +312,30 @@ class Game {
 const game = new Game();
 window.__game = game;
 
-document.getElementById("btn-new").addEventListener("click", async () => {
-  sfx.resume();
-  game.deleteSave();
-  await game.start(false);
-  document.getElementById("title-screen").classList.add("hidden");
-});
-document.getElementById("btn-continue").addEventListener("click", async () => {
-  sfx.resume();
+function showFatal(msg) {
+  const el = document.getElementById("loading-status");
+  if (el) el.textContent = msg;
+  document.getElementById("loading").classList.remove("hidden");
+  console.error(msg);
+}
+window.addEventListener("error", (e) => showFatal("Error: " + (e.error?.message || e.message || "unknown")));
+window.addEventListener("unhandledrejection", (e) => showFatal("Promise: " + (e.reason?.message || e.reason || "unknown")));
+
+async function bootGame(loadSaved) {
+  try {
+    sfx.resume();
+    if (!loadSaved) game.deleteSave();
+    await game.start(loadSaved);
+    document.getElementById("title-screen").classList.add("hidden");
+  } catch (err) {
+    showFatal("Boot failed: " + (err?.message || err));
+  }
+}
+
+document.getElementById("btn-new").addEventListener("click", () => bootGame(false));
+document.getElementById("btn-continue").addEventListener("click", () => {
   if (!game.hasSave()) { game.ui.toast("No save found. Start a new adventure!"); return; }
-  await game.start(true);
-  document.getElementById("title-screen").classList.add("hidden");
+  bootGame(true);
 });
 document.getElementById("btn-help").addEventListener("click", () => {
   document.getElementById("help-screen").classList.remove("hidden");

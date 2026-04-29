@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f1a" />
+  <title>Wubba Lubba Dub Dawn — A Skyrim of Dimension C-137</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='52' font-size='52'%3E%F0%9F%A5%92%3C/text%3E%3C/svg%3E" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.161.0/build/three.module.js"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="loading">
+    <div class="logo">Wubba Lubba<br/>Dub Dawn</div>
+    <div class="sub">A Skyrim of Dimension C-137</div>
+    <div class="bar"><div id="loading-fill"></div></div>
+    <div id="loading-status">Booting interdimensional engine…</div>
+  </div>
+
+  <div id="title-screen" class="hidden">
+    <h1>Wubba Lubba Dub Dawn</h1>
+    <p class="subtitle">"Get in, Morty. We're going to slay some Cromulons."</p>
+    <div class="menu">
+      <button id="btn-new">New Adventure</button>
+      <button id="btn-continue">Continue</button>
+      <button id="btn-help">Controls &amp; Lore</button>
+    </div>
+    <div class="footer">v1.0 — Open the portal gun. The Federation won't kill itself.</div>
+  </div>
+
+  <div id="help-screen" class="overlay hidden">
+    <div class="panel">
+      <h2>Controls</h2>
+      <div class="cols">
+        <div>
+          <h3>Desktop</h3>
+          <ul>
+            <li><b>WASD</b> — Move</li>
+            <li><b>Mouse</b> — Look (click to lock)</li>
+            <li><b>Shift</b> — Sprint</li>
+            <li><b>Space</b> — Jump</li>
+            <li><b>Left Click</b> — Attack (Plumbus)</li>
+            <li><b>Right Click / F</b> — Plasma Rifle</li>
+            <li><b>1 / 2 / 3</b> — Burps (Shouts)</li>
+            <li><b>E</b> — Talk / Interact</li>
+            <li><b>Tab</b> — Inventory &amp; Quests</li>
+            <li><b>M</b> — Map</li>
+            <li><b>Esc</b> — Pause</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Mobile</h3>
+          <ul>
+            <li><b>Left stick</b> — Move</li>
+            <li><b>Drag right side</b> — Look</li>
+            <li><b>⚔</b> — Melee</li>
+            <li><b>🔫</b> — Plasma</li>
+            <li><b>⤒</b> — Jump</li>
+            <li><b>🗣 1/2/3</b> — Burps</li>
+            <li><b>👋</b> — Interact</li>
+            <li><b>☰</b> — Menu</li>
+          </ul>
+        </div>
+      </div>
+      <h2>The Lore</h2>
+      <p>The Galactic Federation has occupied dimension C-137. The Council of Ricks is fractured. Cromulons demand a show. You — a wandering interdimensional vagrant — must show 'em what ya got. Find Rick, brew Schwifty, and free the dimension before Jerry ruins everything (again).</p>
+      <button id="btn-help-close">Close</button>
+    </div>
+  </div>
+
+  <canvas id="game"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="bars">
+      <div class="bar-row"><span class="lbl">HP</span><div class="bar hp"><div id="bar-hp"></div></div></div>
+      <div class="bar-row"><span class="lbl">SCHWIFTY</span><div class="bar mp"><div id="bar-mp"></div></div></div>
+      <div class="bar-row"><span class="lbl">STAM</span><div class="bar st"><div id="bar-st"></div></div></div>
+    </div>
+    <div id="compass"><div id="compass-strip"></div><div id="compass-mark"></div></div>
+    <div id="schmeckles"><span>🪙</span> <span id="schmeckles-num">0</span> Schmeckles</div>
+    <div id="quest-tracker"><div class="title">Active Quest</div><div id="quest-tracker-text">—</div></div>
+    <div id="crosshair">+</div>
+    <div id="interact-hint" class="hidden">[E] Talk</div>
+    <div id="toast"></div>
+    <div id="cooldowns">
+      <div class="cd" data-key="1"><span>1</span><div class="cd-fill"></div><label>Wubba</label></div>
+      <div class="cd" data-key="2"><span>2</span><div class="cd-fill"></div><label>Schwifty</label></div>
+      <div class="cd" data-key="3"><span>3</span><div class="cd-fill"></div><label>Pickle</label></div>
+    </div>
+    <div id="zone-banner" class="hidden"></div>
+    <div id="damage-vignette"></div>
+  </div>
+
+  <!-- Mobile controls -->
+  <div id="mobile-ui" class="hidden">
+    <div id="joystick-zone"><div id="joystick-base"><div id="joystick-knob"></div></div></div>
+    <div id="look-zone"></div>
+    <div id="mobile-buttons">
+      <button class="mob-btn" data-act="jump">⤒</button>
+      <button class="mob-btn" data-act="interact">👋</button>
+      <button class="mob-btn melee" data-act="melee">⚔</button>
+      <button class="mob-btn ranged" data-act="ranged">🔫</button>
+    </div>
+    <div id="mobile-shouts">
+      <button class="mob-btn shout" data-act="shout1">1</button>
+      <button class="mob-btn shout" data-act="shout2">2</button>
+      <button class="mob-btn shout" data-act="shout3">3</button>
+    </div>
+    <button id="mobile-menu" class="mob-btn">☰</button>
+  </div>
+
+  <!-- Pause / Menu -->
+  <div id="menu" class="overlay hidden">
+    <div class="panel wide">
+      <div class="tabs">
+        <button class="tab active" data-tab="inventory">Inventory</button>
+        <button class="tab" data-tab="quests">Quests</button>
+        <button class="tab" data-tab="map">Map</button>
+        <button class="tab" data-tab="stats">Stats</button>
+        <button class="tab" data-tab="system">System</button>
+      </div>
+      <div class="tab-body" id="tab-inventory"></div>
+      <div class="tab-body hidden" id="tab-quests"></div>
+      <div class="tab-body hidden" id="tab-map">
+        <canvas id="minimap-canvas" width="420" height="420"></canvas>
+        <div class="map-legend">
+          <span class="dot you"></span> You &nbsp;
+          <span class="dot npc"></span> NPC &nbsp;
+          <span class="dot enemy"></span> Enemy &nbsp;
+          <span class="dot poi"></span> POI
+        </div>
+      </div>
+      <div class="tab-body hidden" id="tab-stats"></div>
+      <div class="tab-body hidden" id="tab-system">
+        <button id="btn-save">Save</button>
+        <button id="btn-load">Load</button>
+        <button id="btn-reset">Delete Save</button>
+        <button id="btn-quit">Quit to Title</button>
+        <hr/>
+        <label>Mouse Sensitivity <input id="cfg-sens" type="range" min="0.1" max="3" step="0.1" value="1" /></label>
+        <label>Render Distance <input id="cfg-dist" type="range" min="80" max="400" step="20" value="220" /></label>
+        <label>Quality
+          <select id="cfg-quality"><option value="low">Low</option><option value="med" selected>Medium</option><option value="high">High</option></select>
+        </label>
+        <label><input id="cfg-invert" type="checkbox" /> Invert Look Y</label>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dialogue -->
+  <div id="dialogue" class="hidden">
+    <div class="dlg-name" id="dlg-name">Rick</div>
+    <div class="dlg-text" id="dlg-text"></div>
+    <div class="dlg-options" id="dlg-options"></div>
+  </div>
+
+  <!-- Death screen -->
+  <div id="death-screen" class="overlay hidden">
+    <div class="panel">
+      <h2>Aw geez, you died.</h2>
+      <p id="death-msg">"In Bird Culture, this is considered a dick move."</p>
+      <button id="btn-respawn">Respawn at last shrine</button>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

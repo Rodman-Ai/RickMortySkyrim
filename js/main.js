@@ -312,14 +312,9 @@ class Game {
 const game = new Game();
 window.__game = game;
 
-function showFatal(msg) {
-  const el = document.getElementById("loading-status");
-  if (el) el.textContent = msg;
-  document.getElementById("loading").classList.remove("hidden");
-  console.error(msg);
-}
-window.addEventListener("error", (e) => showFatal("Error: " + (e.error?.message || e.message || "unknown")));
-window.addEventListener("unhandledrejection", (e) => showFatal("Promise: " + (e.reason?.message || e.reason || "unknown")));
+// Inline script in index.html already registered window error handlers.
+// We delegate to its showBootError so an in-game error replaces the loading text.
+const showFatal = window.__showBootError || ((msg) => console.error(msg));
 
 async function bootGame(loadSaved) {
   try {
@@ -360,12 +355,13 @@ document.getElementById("cfg-invert").addEventListener("change", (e) => game.inp
 // Mobile menu button handled via [data-act="menu"]? — explicit
 document.getElementById("mobile-menu").addEventListener("click", () => game.ui.toggleMenu());
 
-// Show title screen after a brief loading sim.
-// Note: ES modules execute *after* DOMContentLoaded, so this runs immediately
-// at module-eval time rather than waiting for an event that has already fired.
+// Show title screen after a brief loading sim. ES modules run after
+// DOMContentLoaded, so we kick this off immediately. Bail if a global
+// error has been reported so we don't clobber the diagnostic message.
 (function showLoaderThenTitle() {
   let p = 0;
   const tick = setInterval(() => {
+    if (window.__bootError) { clearInterval(tick); return; }
     p += 6 + Math.random() * 6;
     game.ui.showLoading(true, "Booting interdimensional engine…", Math.min(100, p));
     if (p >= 100) {

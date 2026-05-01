@@ -11,6 +11,8 @@ import { QuestLog } from "./quests.js";
 import { UI } from "./ui.js";
 import { sfx } from "./audio.js";
 import { ITEMS, ZONES } from "./data.js";
+import { Relationships } from "./relationships.js";
+import { Achievements } from "./achievements.js";
 
 const SAVE_KEY = "wubba_dub_dawn_save_v1";
 
@@ -34,6 +36,8 @@ class Game {
     this.ui = new UI(this);
     this.inventory = new Inventory();
     this.questLog = new QuestLog();
+    this.relationships = new Relationships();
+    this.cheevs = new Achievements();
 
     this._handleResize = this._handleResize.bind(this);
     window.addEventListener("resize", this._handleResize);
@@ -76,6 +80,12 @@ class Game {
     if (this.input.isTouch) this.ui.showMobileUI(true);
     this.started = true;
 
+    // First-launch attribute allocation modal (#54)
+    if (!this.player.attrAllocated) {
+      this.ui.openAttrModal();
+    }
+    this.ui._refreshHotbar();
+
     this._handleResize();
     this._loop();
   }
@@ -100,6 +110,7 @@ class Game {
   }
 
   setPaused(p) { this.paused = p; }
+  today() { return new Date().toISOString().slice(0, 10); }
   slowTimeFor(seconds) {
     this.slowTimer = seconds;
     this.timeScale = 0.4;
@@ -107,6 +118,20 @@ class Game {
 
   onEnemyKilled(e) {
     this.questLog.onKill(e.type);
+    this.cheevs.onEnemyKilled(e, this.ui);
+    // Auto-award radiant rewards on completion
+    for (const id in this.questLog.quests) {
+      const q = this.questLog.quests[id];
+      if (q._autoTurnIn && q.done && !q._rewardGiven) {
+        q._rewardGiven = true;
+        if (q.def.reward?.schmeckles) {
+          this.player.schmeckles += q.def.reward.schmeckles;
+          sfx.schmeckle();
+          this.ui.toast(`Bounty completed! +${q.def.reward.schmeckles} schmeckles`);
+        }
+        this.cheevs.onQuestDone(id, this.ui);
+      }
+    }
     if (e.type === "trooper") this.ui.toast(`Trooper defeated. (${this._questProgress("trooper")})`);
     if (e.type === "cronenberg") this.ui.toast(`Cronenberg dispatched. (${this._questProgress("cronenberg")})`);
     if (e.type === "cromulon") {
@@ -145,6 +170,8 @@ class Game {
     // NPC?
     const npc = this.npcMgr.nearestInRange(this.player, 3.0);
     if (npc) {
+      // Daily talk affinity (#42)
+      this.relationships.onTalk(npc.id, this.today());
       // Decide which node to open
       const turn = this.questLog.pendingTurnIn(npc.id);
       this.ui.openDialogue(npc, turn ? turn.node : "start");
@@ -180,6 +207,21 @@ class Game {
       }
     }
 
+    // Word Wall (#34)
+    if (this.world.wordWalls) {
+      const ww = this.world.wordWalls.find((w) => !w.activated && Math.hypot(w.x - this.player.pos.x, w.z - this.player.pos.z) < 2.5);
+      if (ww) {
+        ww.activated = true;
+        // Visual: kill the torch (mark mesh)
+        ww.mesh.traverse((c) => { if (c.isPointLight) c.intensity = 0.3; });
+        this.player.shoutsUnlocked = (this.player.shoutsUnlocked || 3) + 1;
+        this.ui.toast(`Word Wall: "${ww.word}" — +1 shout slot.`);
+        this.cheevs.onWordWall(this.ui);
+        sfx.questDone();
+        return;
+      }
+    }
+
     // Shrine?
     const shrine = this.world.shrines.find((s) => Math.hypot(s.x - this.player.pos.x, s.z - this.player.pos.z) < 2.2);
     if (shrine) {
@@ -187,6 +229,7 @@ class Game {
       this.respawn = { x: shrine.x, y: heightAt(shrine.x, shrine.z) + 1.7, z: shrine.z };
       this._saveGame();
       this.ui.toast("Healed and saved at Shrine.");
+      this.cheevs.onShrine(this.ui);
       sfx.questDone();
       return;
     }
@@ -201,6 +244,7 @@ class Game {
         const next = zones[(idx + 1) % zones.length];
         this.player.pos.set(next.cx, heightAt(next.cx, next.cz) + 1.7, next.cz);
         this.ui.toast(`Portaled to ${next.name}`);
+        this.cheevs.onPortal(this.ui);
         sfx.shout1();
         return;
       }
@@ -223,6 +267,12 @@ class Game {
       timeOfDay: this.timeOfDay,
       lostPlumbusTaken: this.world.lostPlumbus?.taken || false,
       enemiesKilled: this.enemyMgr.list.map((e) => ({ id: e.id, type: e.type, x: e.x, z: e.z, dead: e.dead, hp: e.hp })),
+      attrs: this.player.attrs,
+      attrAllocated: this.player.attrAllocated,
+      hotbar: this.player.hotbar,
+      shoutsUnlocked: this.player.shoutsUnlocked,
+      relationships: this.relationships.serialize(),
+      wordWalls: this.world.wordWalls?.map(w => w.activated) || [],
     };
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -251,6 +301,20 @@ class Game {
       this.world.lostPlumbus.taken = true;
       this.scene.remove(this.world.lostPlumbus.mesh);
     }
+    if (data.attrs) this.player.attrs = data.attrs;
+    if (data.attrAllocated) this.player.attrAllocated = true;
+    if (Array.isArray(data.hotbar)) this.player.hotbar = data.hotbar;
+    if (data.shoutsUnlocked) this.player.shoutsUnlocked = data.shoutsUnlocked;
+    if (data.relationships) this.relationships.load(data.relationships);
+    if (Array.isArray(data.wordWalls) && this.world.wordWalls) {
+      data.wordWalls.forEach((act, i) => {
+        if (act && this.world.wordWalls[i]) {
+          this.world.wordWalls[i].activated = true;
+          this.world.wordWalls[i].mesh.traverse((c) => { if (c.isPointLight) c.intensity = 0.3; });
+        }
+      });
+    }
+    this.player.recalcDerived();
   }
 
   hasSave() { return !!localStorage.getItem(SAVE_KEY); }
@@ -300,8 +364,31 @@ class Game {
 
     // Interact
     if (ip.interact) this._interact();
+    // Hotbar consumable use
+    if (ip.hotbar >= 0) this.ui.useHotbarSlot(ip.hotbar);
 
+    const prevLevel = this.player.level;
     this.player.update(sdt, ip, this.world, this.combat);
+    if (this.player.level !== prevLevel) {
+      this.player.recalcDerived();
+      this.cheevs.onLevel(this.player.level, this.ui);
+      this.ui.toast(`Level ${this.player.level}!`);
+    }
+    // Schmeckle / weather change cheevs
+    this.cheevs.onSchmeckles(this.player.schmeckles, this.ui);
+    if (this.world?._weatherJustChanged) {
+      const w = this.world.weatherDef();
+      this.ui.weatherBannerSet(w.msg || `Weather: ${w.name}`);
+      this.cheevs.onWeather(w.id, this.ui);
+      // Acid rain DoT (#29) — light pulse if exposed (no head armor)
+      // We'll apply a small DoT in the per-frame block below.
+    }
+    // Acid rain ongoing DoT in Cronenberg Wastes — head armor blocks
+    if (this.world.weatherDef().id === "acid" &&
+        Math.hypot(this.player.pos.x - 180, this.player.pos.z - 120) < 90 &&
+        !this.player.equipped.head) {
+      this.player.hp = Math.max(0, this.player.hp - sdt * 1.0);
+    }
     this.enemyMgr.update(sdt, this.player, this.combat);
     this.combat.update(sdt);
     this.combat.tryPickupLoot(this.player);

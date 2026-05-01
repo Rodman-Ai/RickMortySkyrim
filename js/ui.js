@@ -1,6 +1,6 @@
 // UI controller: HUD bars, dialogue, menu tabs, minimap, toasts, zone banner.
 import * as THREE from "three";
-import { ITEMS, POIS, ZONES, FLAVOR, NPCS } from "./data.js";
+import { ITEMS, POIS, ZONES, FLAVOR, NPCS, ATTRIBUTES, ATTR_START_POINTS, ACHIEVEMENTS } from "./data.js";
 import { sfx } from "./audio.js";
 
 export class UI {
@@ -34,6 +34,12 @@ export class UI {
     this.tabBtns = Array.from(document.querySelectorAll(".tab"));
     this.deathScreen = this.$("death-screen");
     this.deathMsg = this.$("death-msg");
+    this.hotbarEl = this.$("hotbar");
+    this.shopEl = this.$("shop");
+    this.attrModal = this.$("attr-modal");
+    this.weatherBanner = this.$("weather-banner");
+    this._buildHotbar();
+    this._bindShopHandlers();
 
     // Reusable scratch vector for projection
     this._proj = new THREE.Vector3();
@@ -73,6 +79,8 @@ export class UI {
         if (b.dataset.tab === "quests") this._renderQuests();
         if (b.dataset.tab === "stats") this._renderStats();
         if (b.dataset.tab === "map") this._renderMap();
+        if (b.dataset.tab === "hearts") this._renderHearts();
+        if (b.dataset.tab === "cheevs") this._renderCheevs();
         sfx.ui();
       });
     }
@@ -209,6 +217,8 @@ export class UI {
       if (active === "quests") this._renderQuests();
       if (active === "stats") this._renderStats();
       if (active === "map") this._renderMap();
+      if (active === "hearts") this._renderHearts();
+      if (active === "cheevs") this._renderCheevs();
     }
     sfx.ui();
   }
@@ -224,16 +234,21 @@ export class UI {
                        def.type === "armor" ? `Wear` :
                        def.type === "consume" ? `Use` :
                        "";
+        const quick = def.type === "consume" ? `<button class="inv-quick" data-key="${key}">→ Slot</button>` : "";
         return `<div class="inv-item${isEq ? " equipped" : ""}" data-key="${key}">
           <div class="name">${def.icon || "•"} ${def.name}${count > 1 ? ` ×${count}` : ""}</div>
           <div class="desc">${def.desc}</div>
           ${action ? `<button class="inv-act" data-key="${key}">${action}</button>` : ""}
+          ${quick}
         </div>`;
       }).join("")}</div>`;
     const el = this.$("tab-inventory");
     el.innerHTML = html;
     for (const b of el.querySelectorAll(".inv-act")) {
       b.addEventListener("click", (e) => { e.stopPropagation(); this._useItem(b.dataset.key); });
+    }
+    for (const b of el.querySelectorAll(".inv-quick")) {
+      b.addEventListener("click", (e) => { e.stopPropagation(); this.assignToHotbar(b.dataset.key); });
     }
   }
   _useItem(key) {
@@ -254,6 +269,7 @@ export class UI {
       sfx.pickup();
     }
     this._renderInventory();
+    this._refreshHotbar();
   }
 
   _renderQuests() {
@@ -282,6 +298,7 @@ export class UI {
     const eq = p.equipped;
     const el = this.$("tab-stats");
     const eqStr = (k) => k ? ITEMS[k].name : "—";
+    const attrRows = ATTRIBUTES.map(a => `<p>${a.icon} ${a.name}: <b>${p.attrs[a.key]}</b></p>`).join("");
     el.innerHTML = `
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
         <div><h3>Vital Stats</h3>
@@ -290,6 +307,7 @@ export class UI {
         <p>Schwifty: ${Math.floor(p.mp)} / ${p.maxMP}</p>
         <p>Stamina: ${Math.floor(p.st)} / ${p.maxST}</p>
         <p>Schmeckles: ${Math.floor(p.schmeckles)}</p>
+        <p>Shouts unlocked: ${p.shoutsUnlocked || 3}</p>
         </div>
         <div><h3>Equipment</h3>
         <p>Melee: ${eqStr(eq.melee)}</p>
@@ -298,7 +316,38 @@ export class UI {
         <p>Body: ${eqStr(eq.body)}</p>
         </div>
       </div>
+      <h3 style="margin-top:14px;">Attributes</h3>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+        ${attrRows}
+      </div>
     `;
+  }
+
+  _renderHearts() {
+    const el = this.$("tab-hearts");
+    const rel = this.game.relationships;
+    const npcs = NPCS.filter((n) => !n.isBoard);
+    el.innerHTML = npcs.map((n) => {
+      const h = rel.hearts(n.id);
+      const full = "♥".repeat(h);
+      const empty = "♡".repeat(10 - h);
+      return `<div class="hearts-row">
+        <div class="nm"><b>${n.name}</b><small>${h}/10 hearts</small></div>
+        <div class="hh"><span class="full">${full}</span><span class="empty">${empty}</span></div>
+      </div>`;
+    }).join("") + `<p style="margin-top:14px; opacity:0.7; font-size:12px;">Talk daily and bring loved gifts to raise hearts. Marriage at 10.</p>`;
+  }
+
+  _renderCheevs() {
+    const el = this.$("tab-cheevs");
+    const list = this.game.cheevs.list();
+    const unlocked = list.filter((a) => a.unlocked).length;
+    el.innerHTML = `<p>Unlocked: <b>${unlocked}</b> / ${list.length}</p>` + list.map((a) =>
+      `<div class="cheev-row ${a.unlocked ? "unlocked" : "locked"}">
+        <div class="ic">${a.unlocked ? "🏆" : "🔒"}</div>
+        <div class="nm"><b>${a.name}</b><small>${a.desc}</small></div>
+      </div>`
+    ).join("");
   }
 
   _renderMap() {
@@ -365,17 +414,111 @@ export class UI {
     const node = npc.dialogue[nodeId];
     if (!node) return this.closeDialogue();
     this.dlgName.textContent = npc.name;
+    // Show hearts inline for NPCs with affinity
+    const rel = this.game.relationships;
+    if (rel && !npc.isBoard && npc.dialogue) {
+      const h = rel.hearts(npc.id);
+      this.dlgName.innerHTML = `${npc.name} <span style="color:#ff5577;font-size:14px;">${"♥".repeat(h)}${"♡".repeat(10 - h)}</span>`;
+    }
     this.dlgText.textContent = node.text;
     this.dlgOptions.innerHTML = "";
     (node.options || []).forEach((opt) => {
       const b = document.createElement("button");
       b.textContent = opt.text;
+      // Skill-check option styling + gating (#41)
+      if (opt.check) {
+        b.classList.add("check");
+        const passes = (this.game.player.attrs[opt.check.attr] || 1) >= opt.check.dc;
+        if (!passes) {
+          b.classList.add("fail");
+          b.textContent += "  ✗";
+          b.disabled = true;
+        }
+      }
       b.addEventListener("click", () => this._chooseOption(opt));
       this.dlgOptions.appendChild(b);
     });
+    // Gift option (#42 / #43): if standing near an NPC with NPC_GIFTS table, allow choosing an item to give.
+    if (rel && !npc.isBoard && nodeId === "start") {
+      const giftBtn = document.createElement("button");
+      giftBtn.textContent = "💝 Give a gift";
+      giftBtn.addEventListener("click", () => this._openGiftPicker(npc));
+      this.dlgOptions.appendChild(giftBtn);
+    }
+  }
+
+  _openGiftPicker(npc) {
+    const rel = this.game.relationships;
+    const today = this.game.today();
+    if (rel.giftedToday[npc.id] === today) {
+      this.toast("Already gave a gift today.");
+      return;
+    }
+    this.dlgText.textContent = `Give what to ${npc.name}?`;
+    this.dlgOptions.innerHTML = "";
+    const items = this.game.inventory.list().filter((it) => it.def);
+    if (!items.length) {
+      this.dlgOptions.innerHTML = `<button>(empty inventory)</button>`;
+      return;
+    }
+    for (const it of items) {
+      const b = document.createElement("button");
+      b.textContent = `${it.def.icon || "•"} ${it.def.name}`;
+      b.addEventListener("click", () => {
+        const r = rel.giveGift(npc.id, it.key, today);
+        if (!r.ok) { this.toast("Not today."); return; }
+        this.game.inventory.remove(it.key, 1);
+        const tierMsg = { loved: "loved it!", liked: "liked it.", neutral: "accepted it.", hated: "hated it." }[r.tier];
+        this.toast(`${npc.name} ${tierMsg} (${r.delta >= 0 ? "+" : ""}${r.delta})`);
+        sfx.questDone();
+        if (rel.hearts(npc.id) >= 10) this.game.cheevs?.onMarriage(this);
+        // Check all hearts maxed
+        const allMax = NPCS.filter((n) => !n.isBoard).every((n) => rel.hearts(n.id) >= 10);
+        if (allMax) this.game.cheevs?.onHearts(true, this);
+        this._renderDialogueNode();
+      });
+      this.dlgOptions.appendChild(b);
+    }
+    const back = document.createElement("button");
+    back.textContent = "Back";
+    back.addEventListener("click", () => this._renderDialogueNode());
+    this.dlgOptions.appendChild(back);
   }
   _chooseOption(opt) {
     sfx.ui();
+    // Skill-check failure path (#41)
+    if (opt.check) {
+      const passes = (this.game.player.attrs[opt.check.attr] || 1) >= opt.check.dc;
+      if (!passes) {
+        this.dlgText.textContent = opt.failText || "You couldn't pull it off.";
+        this.dlgOptions.innerHTML = "";
+        const back = document.createElement("button");
+        back.textContent = "Back";
+        back.addEventListener("click", () => this._renderDialogueNode());
+        this.dlgOptions.appendChild(back);
+        return;
+      }
+    }
+    // Open shop (#16)
+    if (opt.openShop) {
+      const shopNpc = this._dialogueCtx?.npc;
+      const modifier = opt.modifier || {};
+      this.closeDialogue();
+      if (shopNpc) this.openShop(shopNpc, modifier);
+      return;
+    }
+    // Bounty board pull (#51)
+    if (opt.radiant) {
+      const q = this.game.questLog.giveRadiant();
+      if (q) {
+        this.toast(`New bounty: ${q.def.title} — ${q.def.objectives[0].count} ${q.def.objectives[0].target}s`);
+        sfx.questDone();
+      } else {
+        this.toast("No bounties available right now.");
+      }
+      this.closeDialogue();
+      return;
+    }
     if (opt.give) this.game.questLog.give(opt.give);
     if (opt.reward) {
       if (opt.reward.item) {
@@ -399,6 +542,7 @@ export class UI {
       const turnIn = this.game.questLog.pendingTurnIn(this._dialogueCtx.npc.id);
       if (turnIn && this._dialogueCtx.nodeId === turnIn.node) {
         this.game.questLog.finishTurnIn(turnIn.questId);
+        this.game.cheevs?.onQuestDone(turnIn.questId, this);
         sfx.questDone();
       }
       this.closeDialogue();
@@ -412,6 +556,233 @@ export class UI {
   }
   isDialogueOpen() { return this._dialogueOpen; }
   isMenuOpen() { return !this.menu.classList.contains("hidden"); }
+  isShopOpen() { return !this.shopEl.classList.contains("hidden"); }
+  isAttrModalOpen() { return !this.attrModal.classList.contains("hidden"); }
+
+  // === Hotbar (#64) ===
+  _buildHotbar() {
+    this.hotbarEl.innerHTML = "";
+    for (let i = 0; i < 5; i++) {
+      const slot = document.createElement("div");
+      slot.className = "hot-slot empty";
+      slot.dataset.slot = i;
+      slot.innerHTML = `<span class="key">${i + 4}</span>`;
+      slot.addEventListener("click", () => this._useHotbar(i));
+      this.hotbarEl.appendChild(slot);
+    }
+  }
+  _refreshHotbar() {
+    const player = this.game.player;
+    if (!player) return;
+    for (let i = 0; i < 5; i++) {
+      const slot = this.hotbarEl.children[i];
+      const key = player.hotbar[i];
+      slot.innerHTML = `<span class="key">${i + 4}</span>`;
+      if (!key) { slot.classList.add("empty"); continue; }
+      const def = ITEMS[key];
+      const count = this.game.inventory.items[key] || 0;
+      if (!def || count <= 0) {
+        player.hotbar[i] = null;
+        slot.classList.add("empty");
+        continue;
+      }
+      slot.classList.remove("empty");
+      slot.innerHTML += `<span title="${def.name}">${def.icon || "?"}</span><span class="ct">${count}</span>`;
+    }
+  }
+  useHotbarSlot(i) { this._useHotbar(i); }
+  _useHotbar(i) {
+    const player = this.game.player;
+    const key = player.hotbar[i];
+    if (!key) return;
+    const def = ITEMS[key];
+    if (!def) return;
+    if (def.type !== "consume") {
+      this.toast("That can't be used quickly.");
+      return;
+    }
+    if ((this.game.inventory.items[key] || 0) <= 0) return;
+    this._useItem(key);
+    this._refreshHotbar();
+  }
+  // Called from inventory tab "Quick" button to assign a consumable.
+  assignToHotbar(itemKey) {
+    const player = this.game.player;
+    // find first empty slot, or replace slot 0
+    let idx = player.hotbar.findIndex((x) => !x);
+    if (idx < 0) idx = 0;
+    player.hotbar[idx] = itemKey;
+    this._refreshHotbar();
+    this.toast(`Assigned ${ITEMS[itemKey].name} to slot ${idx + 1}`);
+  }
+
+  // === Shop overlay (#16) ===
+  _bindShopHandlers() {
+    this.$("shop-close").addEventListener("click", () => this.closeShop());
+    for (const btn of this.shopEl.querySelectorAll(".shop-tab")) {
+      btn.addEventListener("click", () => {
+        for (const b of this.shopEl.querySelectorAll(".shop-tab")) b.classList.remove("active");
+        btn.classList.add("active");
+        this._renderShopList(btn.dataset.shopTab);
+        sfx.ui();
+      });
+    }
+  }
+  openShop(npc, modifier = {}) {
+    if (!npc.shop) return;
+    this._shopCtx = { npc, modifier };
+    this.$("shop-title").textContent = npc.shop.title || `${npc.name}'s Shop`;
+    this.shopEl.classList.remove("hidden");
+    this.game.setPaused(true);
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    // Reset to Buy tab
+    for (const b of this.shopEl.querySelectorAll(".shop-tab")) b.classList.toggle("active", b.dataset.shopTab === "buy");
+    this._renderShopList("buy");
+  }
+  closeShop() {
+    this.shopEl.classList.add("hidden");
+    this._shopCtx = null;
+    this.game.setPaused(false);
+  }
+  _renderShopList(mode) {
+    const list = this.$("shop-list");
+    const balanceEl = this.$("shop-schmeckles");
+    balanceEl.textContent = Math.floor(this.game.player.schmeckles);
+    list.innerHTML = "";
+    if (!this._shopCtx) return;
+    const { npc, modifier } = this._shopCtx;
+    const charm = this.game.player.attrs.charm || 1;
+    const charmDiscount = 1 - Math.min(0.20, (charm - 1) * 0.02);
+    const discount = (modifier.discount || 1) * charmDiscount;
+    if (mode === "buy") {
+      for (const row of npc.shop.stock) {
+        const def = ITEMS[row.item];
+        if (!def) continue;
+        const price = Math.max(1, Math.round(row.price * discount));
+        const can = this.game.player.schmeckles >= price;
+        const div = document.createElement("div");
+        div.className = "shop-row";
+        div.innerHTML = `<div class="ic">${def.icon || "?"}</div>
+          <div class="nm"><b>${def.name}</b><small>${def.desc || ""}</small></div>
+          <div class="price">🪙 ${price}</div>`;
+        const buy = document.createElement("button");
+        buy.textContent = "Buy";
+        buy.disabled = !can;
+        buy.addEventListener("click", () => {
+          if (this.game.player.schmeckles < price) return;
+          this.game.player.schmeckles -= price;
+          this.game.inventory.add(row.item, 1);
+          sfx.schmeckle();
+          this.toast(`Bought ${def.name}`);
+          this.game.cheevs?.onPurchase(this);
+          this._renderShopList("buy");
+        });
+        div.appendChild(buy);
+        list.appendChild(div);
+      }
+    } else {
+      const items = this.game.inventory.list().filter((it) => it.def && it.def.type !== "key" && it.def.type !== "currency");
+      if (items.length === 0) { list.innerHTML = `<p style="opacity:0.7">Nothing to sell.</p>`; return; }
+      for (const it of items) {
+        const stockRow = npc.shop.stock.find((r) => r.item === it.key);
+        const sellPrice = Math.max(1, Math.round((stockRow ? stockRow.price : 30) * 0.4));
+        const div = document.createElement("div");
+        div.className = "shop-row";
+        div.innerHTML = `<div class="ic">${it.def.icon || "?"}</div>
+          <div class="nm"><b>${it.def.name}${it.count > 1 ? ` ×${it.count}` : ""}</b><small>${it.def.desc || ""}</small></div>
+          <div class="price">🪙 ${sellPrice}</div>`;
+        const sell = document.createElement("button");
+        sell.textContent = "Sell";
+        sell.addEventListener("click", () => {
+          if (!this.game.inventory.remove(it.key, 1)) return;
+          this.game.player.schmeckles += sellPrice;
+          sfx.schmeckle();
+          this.toast(`Sold ${it.def.name} (+${sellPrice})`);
+          this.game.cheevs?.onSell(this);
+          this._renderShopList("sell");
+        });
+        div.appendChild(sell);
+        list.appendChild(div);
+      }
+    }
+  }
+
+  // === Attribute allocation modal (#54) ===
+  openAttrModal() {
+    this.attrModal.classList.remove("hidden");
+    this.game.setPaused(true);
+    if (document.pointerLockElement) document.exitPointerLock?.();
+    const player = this.game.player;
+    let remaining = ATTR_START_POINTS;
+    const list = this.$("attr-list");
+    list.innerHTML = "";
+    const update = () => {
+      this.$("attr-points").textContent = remaining;
+      this.$("attr-confirm").disabled = remaining > 0;
+    };
+    for (const a of ATTRIBUTES) {
+      const row = document.createElement("div");
+      row.className = "attr-row";
+      row.innerHTML = `<div class="ic">${a.icon}</div>
+        <div class="nm"><b>${a.name}</b><small>${a.desc}</small></div>
+        <div class="ctrl">
+          <button class="dec">-</button>
+          <span class="val">${player.attrs[a.key]}</span>
+          <button class="inc">+</button>
+        </div>`;
+      const valEl = row.querySelector(".val");
+      row.querySelector(".inc").addEventListener("click", () => {
+        if (remaining <= 0) return;
+        if (player.attrs[a.key] >= 10) return;
+        player.attrs[a.key]++;
+        remaining--;
+        valEl.textContent = player.attrs[a.key];
+        update();
+        sfx.ui();
+      });
+      row.querySelector(".dec").addEventListener("click", () => {
+        if (player.attrs[a.key] <= 1) return;
+        player.attrs[a.key]--;
+        remaining++;
+        valEl.textContent = player.attrs[a.key];
+        update();
+        sfx.ui();
+      });
+      list.appendChild(row);
+    }
+    update();
+    this.$("attr-confirm").onclick = () => {
+      player.attrAllocated = true;
+      player.recalcDerived();
+      this.attrModal.classList.add("hidden");
+      this.game.setPaused(false);
+      this.toast("Attributes locked in. Good luck.");
+      this.game._saveGame();
+    };
+  }
+
+  // === Achievement toast ===
+  cheevToast(def) {
+    const t = document.createElement("div");
+    t.className = "cheev-toast";
+    t.innerHTML = `🏆 <b>${def.name}</b> — ${def.desc}`;
+    document.body.appendChild(t);
+    sfx.questDone();
+    setTimeout(() => t.remove(), 4200);
+  }
+
+  // === Weather banner ===
+  weatherBannerSet(text) {
+    if (!text) return;
+    this.weatherBanner.textContent = text;
+    this.weatherBanner.classList.remove("hidden");
+    this.weatherBanner.classList.add("show");
+    clearTimeout(this._weatherT);
+    this._weatherT = setTimeout(() => {
+      this.weatherBanner.classList.remove("show");
+      setTimeout(() => this.weatherBanner.classList.add("hidden"), 1100);
+    }, 3500);
+  }
 
   // === Damage floaters ===
   // worldX/Y/Z is the spawn position; kind is "enemy" (yellow) or "player" (red)

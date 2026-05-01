@@ -3,7 +3,33 @@ import * as THREE from "three";
 import { heightAt } from "./world.js";
 import { NPCS } from "./data.js";
 
+function makeBountyBoard() {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f2a, flatShading: true });
+  const cork = new THREE.MeshLambertMaterial({ color: 0xa67c52 });
+  const post1 = new THREE.Mesh(new THREE.BoxGeometry(0.12, 2.2, 0.12), wood);
+  post1.position.set(-0.7, 1.1, 0);
+  const post2 = post1.clone(); post2.position.x = 0.7;
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.4, 0.12), wood);
+  board.position.set(0, 1.7, 0);
+  const corkSurface = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.2, 0.02), cork);
+  corkSurface.position.set(0, 1.7, 0.07);
+  // A few bounty papers (yellowed planes)
+  for (let i = 0; i < 4; i++) {
+    const paper = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.32, 0.4),
+      new THREE.MeshLambertMaterial({ color: 0xfbe7b0 })
+    );
+    paper.position.set(-0.5 + (i % 2) * 0.5, 1.85 - Math.floor(i / 2) * 0.5, 0.09);
+    paper.rotation.z = (Math.random() - 0.5) * 0.2;
+    g.add(paper);
+  }
+  g.add(post1); g.add(post2); g.add(board); g.add(corkSurface);
+  return g;
+}
+
 function makeNPC(npc) {
+  if (npc.isBoard) return makeBountyBoard();
   // Polygon counts boosted ~25x total over baseline.
   // Cylinder radial 18→40 + height 4→9; spheres 28,22→62,49 and 28,18→62,40;
   // eyes 14→32; cone 24→54.
@@ -51,13 +77,15 @@ export class NPCManager {
   }
   update(dt, player, questLog) {
     for (const n of this.list) {
-      // Bob indicator if NPC has any pending dialogue
-      const hasOffer = this._hasOffer(n, questLog);
+      // Bob indicator if NPC has any pending dialogue (boards never bob)
+      const hasOffer = !n.isBoard && this._hasOffer(n, questLog);
       n._ind.visible = hasOffer;
       n._ind.position.y = 2.8 + Math.sin(performance.now() * 0.003 + n._x) * 0.15;
-      // Face player softly
-      const dx = player.pos.x - n._x, dz = player.pos.z - n._z;
-      n._mesh.rotation.y = Math.atan2(dx, dz);
+      if (!n.isBoard) {
+        // Face player softly
+        const dx = player.pos.x - n._x, dz = player.pos.z - n._z;
+        n._mesh.rotation.y = Math.atan2(dx, dz);
+      }
     }
   }
   _hasOffer(n, questLog) {

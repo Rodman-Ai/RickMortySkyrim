@@ -186,6 +186,7 @@ export class Combat {
           this.ui.toast(`Picked up: ${ITEMS[l.kind]?.name || l.kind}`);
         }
         sfx.pickup();
+        this.game.cheevs?.onLoot(this.ui);
         this.scene.remove(l.mesh);
         this.loot.splice(i, 1);
       }

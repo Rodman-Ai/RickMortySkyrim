@@ -12,7 +12,77 @@ export const ITEMS = {
   pickleArmor: { name: "Pickle Plate", desc: "I turned myself into a pickle!", type: "armor", slot: "body", def: 14, icon: "🥒" },
   schmeckles: { name: "Schmeckles", desc: "Universally accepted (in this universe).", type: "currency", icon: "🪙" },
   schmecklePouch: { name: "Schmeckle Pouch", desc: "Loose change.", type: "consume", effect: "currency", icon: "💰" },
+  // Crafting / radiant ingredients
+  microverseCell: { name: "Microverse Cell", desc: "Tiny civilization. Don't shake.", type: "ingredient", icon: "🔋" },
+  cronenbergGland: { name: "Cronenberg Gland", desc: "Drips faintly. Used in alchemy.", type: "ingredient", icon: "🟤" },
+  // Equipment unlocked via achievements / radiants
+  goldenPlumbus: { name: "Golden Plumbus", desc: "It's the same. But gold.", type: "weapon", slot: "melee", dmg: 30, icon: "🥇" },
 };
+
+// === SPECIAL attributes (#54) ===
+// Each level-1 player allocates START_POINTS across 6 attributes.
+export const ATTRIBUTES = [
+  { key: "schwiftiness", name: "Schwiftiness", desc: "Boosts Schwifty regen and shout damage.", icon: "🎵" },
+  { key: "smarts",       name: "Smarts",       desc: "Improves dialogue [Smarts] checks and crafting.", icon: "🧠" },
+  { key: "pizzazz",      name: "Pizzazz",      desc: "Increases melee crit chance.", icon: "💥" },
+  { key: "endurance",    name: "Endurance",    desc: "Raises max HP and stamina.", icon: "🛡" },
+  { key: "charm",        name: "Charm",        desc: "Improves [Persuade] checks and shop prices.", icon: "💋" },
+  { key: "luck",         name: "Luck",         desc: "Better loot, more crits, lucky finds.", icon: "🍀" },
+];
+export const ATTR_START_POINTS = 6;
+export const ATTR_DEFAULT = 1;
+export const ATTR_MAX = 10;
+
+// === Achievements (#91) ===
+export const ACHIEVEMENTS = [
+  { id: "first_blood",   name: "First Blood",          desc: "Defeat any enemy." },
+  { id: "ten_kills",     name: "Mortyfication",         desc: "Defeat 10 enemies." },
+  { id: "hundred_kills", name: "Existence Is Pain",     desc: "Defeat 100 enemies." },
+  { id: "first_loot",    name: "Riggity Riggity Looted", desc: "Pick up your first loot drop." },
+  { id: "first_shout",   name: "Wubba Lubba",            desc: "Use your first burp." },
+  { id: "all_shouts",    name: "Get Schwifty",           desc: "Use all three burps in one session." },
+  { id: "first_quest",   name: "On the Job",             desc: "Complete your first quest." },
+  { id: "main_done",     name: "Show Me What Ya Got",    desc: "Complete the main story." },
+  { id: "rich",          name: "Schmeckle Magnate",      desc: "Hold 1000 schmeckles." },
+  { id: "merchant",      name: "Capitalist Pig",         desc: "Make your first purchase." },
+  { id: "shrine",        name: "Pilgrim",                desc: "Pray at any shrine." },
+  { id: "portal",        name: "Interdimensional",       desc: "Use a portal." },
+  { id: "level_5",       name: "Coming Up",              desc: "Reach Level 5." },
+  { id: "level_10",      name: "Power Up",               desc: "Reach Level 10." },
+  { id: "boss_cromulon", name: "Show Them",              desc: "Defeat the Cromulon." },
+  { id: "marriage",      name: "In Bird Culture",        desc: "Reach 10 hearts with anyone." },
+  { id: "word_wall",     name: "Power of the Word",      desc: "Discover a Word Wall." },
+  { id: "all_weather",   name: "Storm Chaser",           desc: "Experience every weather type." },
+  { id: "rich_friend",   name: "Best Friends",           desc: "Reach 10 hearts with all NPCs." },
+  { id: "thrifty",       name: "Thrifty Trader",         desc: "Sell 10 items to a merchant." },
+  { id: "achiever",      name: "Achievement Hunter",     desc: "Unlock 15 achievements." },
+];
+
+// === NPC affinity gift tables (#42, #43) ===
+// Loved → +60 affinity, Liked → +30, Neutral → +5, Hated → -40
+export const NPC_GIFTS = {
+  rick:       { loved: ["szechuanSauce", "microverseCell"], liked: ["schwiftyPotion"], hated: ["schmecklePouch"] },
+  morty:      { loved: ["szechuanSauce"], liked: ["healJuice"], hated: ["cronenbergGland"] },
+  jerry:      { loved: ["plumbus"], liked: ["healJuice"], hated: ["microverseCell"] },
+  birdperson: { loved: ["birdpersonHelm"], liked: ["healJuice"], hated: ["szechuanSauce"] },
+};
+
+// === Weather (#28) ===
+export const WEATHERS = [
+  { id: "clear",    name: "Clear",          fog: 0xc7d3ec, fogFar: 380, particles: null,    msg: "" },
+  { id: "acid",     name: "Acid Rain",      fog: 0x96b070, fogFar: 220, particles: "acid",  msg: "Acid rain falls — head armor protects." },
+  { id: "snow",     name: "Snowfall",       fog: 0xdde6f0, fogFar: 200, particles: "snow",  msg: "Snow blankets the peaks." },
+  { id: "storm",    name: "Cromulon Storm", fog: 0x554466, fogFar: 180, particles: "storm", msg: "Cromulons stir overhead!" },
+  { id: "fog",      name: "Toxic Fog",      fog: 0x6a7e6a, fogFar: 90,  particles: null,    msg: "A thick toxic fog rolls in." },
+];
+
+// === Radiant Quest templates (#51) ===
+// Generator picks a template, fills in target type / count / location / reward.
+export const RADIANT_TEMPLATES = [
+  { id: "hunt_cronenberg", title: "Cull the Wastes",      target: "cronenberg", min: 3, max: 6, schmeckles: [80, 160] },
+  { id: "hunt_trooper",    title: "Federation Bounty",    target: "trooper",    min: 2, max: 5, schmeckles: [120, 240] },
+  { id: "hunt_meeseeks",   title: "Reduce the Meeseeks",  target: "meeseeks",   min: 3, max: 7, schmeckles: [60, 140] },
+];
 
 // Zone definitions (radius positions on the world map; world is ~600x600 around origin)
 export const ZONES = [
@@ -60,7 +130,14 @@ export const NPCS = [
       },
       done_main: {
         text: "Five down? *burp* Decent. Take this Plasma Rifle. Now go find Morty — he's wandered off again.",
-        options: [{ text: "Thanks, Rick.", end: true, reward: { item: "plasmaRifle", schmeckles: 100 } }]
+        options: [
+          { text: "Thanks, Rick.", end: true, reward: { item: "plasmaRifle", schmeckles: 100 } },
+          { text: "[Smarts 4] Tell me about Microverse Cells.", check: { attr: "smarts", dc: 4 }, next: "secret_cell", success: "secret_cell", failText: "He waves you off. \"Come back when you've actually read a book.\"" },
+        ]
+      },
+      secret_cell: {
+        text: "*burp* Fine, smartass. Microverse Cells are everywhere if you know where to look. Take this one.",
+        options: [{ text: "Wow.", end: true, reward: { item: "microverseCell" } }]
       }
     },
   },
@@ -105,6 +182,53 @@ export const NPCS = [
     }
   },
   {
+    id: "wendell",
+    name: "Wholesale Wendell",
+    pos: [10, 0, 14],          // by the front gate inside the fence
+    color: 0xa67c52, hairColor: 0x2a1a0a,
+    shop: {
+      title: "Wendell's Wholesale",
+      stock: [
+        { item: "healJuice",       price: 25 },
+        { item: "schwiftyPotion",  price: 35 },
+        { item: "szechuanSauce",   price: 80 },
+        { item: "plumbus",         price: 120 },
+        { item: "plasmaRifle",     price: 350 },
+        { item: "birdpersonHelm",  price: 200 },
+      ],
+    },
+    dialogue: {
+      start: {
+        text: "Wholesale Wendell, at your service! Schmeckles speak my language. What'll it be?",
+        options: [
+          { text: "Show me your wares.", openShop: true, end: true },
+          { text: "[Charm 4] Any chance of a discount?", check: { attr: "charm", dc: 4 }, next: "discount", success: "discount", failText: "Wendell laughs. \"Not at THESE prices, friend.\"" },
+          { text: "Maybe later.", end: true },
+        ],
+      },
+      discount: {
+        text: "Aha! A real customer. 10% off this visit. Just for you.",
+        options: [{ text: "Excellent.", openShop: true, end: true, modifier: { discount: 0.9 } }],
+      },
+    },
+  },
+  {
+    id: "bounty_board",
+    name: "Bounty Board",
+    pos: [-2, 0, 14],         // near the front gate
+    color: 0x8a6a45, hairColor: 0x4a3a2a,
+    isBoard: true,
+    dialogue: {
+      start: {
+        text: "A weathered cork board crowded with bounty notices.",
+        options: [
+          { text: "Take a contract.", radiant: true, end: true },
+          { text: "Walk away.", end: true },
+        ],
+      },
+    },
+  },
+  {
     id: "birdperson",
     name: "Birdperson",
     pos: [-208, 0, 178],
@@ -115,8 +239,13 @@ export const NPCS = [
         options: [
           { text: "I will. (Accept Slay the Cromulon)", next: "ack", give: "boss_cromulon" },
           { text: "What is bird culture?", next: "culture" },
+          { text: "[Charm 5] Will you fight beside me?", check: { attr: "charm", dc: 5 }, next: "join", success: "join", failText: "He stares. \"In bird culture, that question requires a deeper bond.\"" },
           { text: "Goodbye.", end: true }
         ]
+      },
+      join: {
+        text: "In bird culture, this is considered an honour. Take this token of respect.",
+        options: [{ text: "Thank you.", end: true, reward: { item: "goldenPlumbus", schmeckles: 200 } }]
       },
       culture: {
         text: "It is many things. I have spoken.",

@@ -49,12 +49,22 @@ export class Player {
     this.yaw = 0; this.pitch = 0;
     this.onGround = true;
 
-    // Stats
+    // SPECIAL attributes (#54). Default 1, allocated via the initial modal.
+    this.attrs = { schwiftiness: 1, smarts: 1, pizzazz: 1, endurance: 1, charm: 1, luck: 1 };
+    this.attrAllocated = false;
+
+    // Stats — endurance bonus applied later in recalcDerived()
     this.maxHP = 100; this.hp = 100;
     this.maxMP = 100; this.mp = 100;
     this.maxST = 100; this.st = 100;
     this.level = 1; this.xp = 0; this.xpToNext = 100;
     this.schmeckles = 0;
+
+    // Hotbar quickslots (#64). 5 slots; values are item keys or null.
+    this.hotbar = [null, null, null, null, null];
+
+    // Granted shout slots (#34 word walls). Increased as walls are activated.
+    this.shoutsUnlocked = 3;
 
     // Equipment
     this.equipped = { melee: "plumbus", ranged: null, head: null, body: null };
@@ -255,6 +265,7 @@ export class Player {
     this.shoutCD[slot] = this.shoutMax[slot];
     sfx[`shout${slot + 1}`]();
     combat.playerShout(kind);
+    combat.game?.cheevs?.onShout(slot, combat.ui);
   }
 
   _updateViewmodel(dt, moving, sprinting) {
@@ -286,6 +297,21 @@ export class Player {
 
   shake(amount = 1) { this._shakeT = Math.min(1.4, this._shakeT + amount); }
 
+  // Recompute attribute-derived caps. Called whenever attrs change.
+  recalcDerived() {
+    const enduranceBonus = (this.attrs.endurance - 1) * 10;     // +10 max HP/ST per pt
+    const schwiftyBonus  = (this.attrs.schwiftiness - 1) * 8;   // +8 max MP per pt
+    const baseHP = 100 + (this.level - 1) * 10;
+    const baseMP = 100 + (this.level - 1) * 5;
+    const baseST = 100 + (this.level - 1) * 5;
+    this.maxHP = baseHP + enduranceBonus;
+    this.maxMP = baseMP + schwiftyBonus;
+    this.maxST = baseST + enduranceBonus;
+    this.hp = Math.min(this.hp, this.maxHP);
+    this.mp = Math.min(this.mp, this.maxMP);
+    this.st = Math.min(this.st, this.maxST);
+  }
+
   takeDamage(amount) {
     let def = 0;
     if (this.equipped.head) def += 8;
@@ -305,9 +331,10 @@ export class Player {
       this.xp -= this.xpToNext;
       this.level += 1;
       this.xpToNext = Math.floor(this.xpToNext * 1.4);
-      this.maxHP += 10; this.hp = this.maxHP;
-      this.maxMP += 5; this.mp = this.maxMP;
-      this.maxST += 5; this.st = this.maxST;
     }
+    // recalcDerived() is called by main.js when level changes, which sets
+    // max{HP,MP,ST} from level + attributes; we just bump current to full.
+    this.recalcDerived();
+    this.hp = this.maxHP; this.mp = this.maxMP; this.st = this.maxST;
   }
 }

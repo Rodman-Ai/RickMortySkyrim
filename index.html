@@ -123,6 +123,32 @@
     <div id="enemy-bars"></div>
     <div id="compass-waypoint" class="hidden">▼</div>
     <canvas id="hud-minimap" width="180" height="180"></canvas>
+    <div id="hotbar"></div>
+    <div id="weather-banner" class="hidden"></div>
+  </div>
+
+  <!-- Attribute allocation modal (#54) -->
+  <div id="attr-modal" class="overlay hidden">
+    <div class="panel">
+      <h2>Choose Your Stats</h2>
+      <p>Distribute <span id="attr-points">6</span> points across your attributes. You can't change these later.</p>
+      <div id="attr-list"></div>
+      <button id="attr-confirm" disabled>Begin Adventure</button>
+    </div>
+  </div>
+
+  <!-- Shop overlay (#16) -->
+  <div id="shop" class="overlay hidden">
+    <div class="panel wide">
+      <button id="shop-close" aria-label="Close shop">✕</button>
+      <h2 id="shop-title">Shop</h2>
+      <div class="shop-balance">🪙 <span id="shop-schmeckles">0</span> Schmeckles</div>
+      <div class="shop-tabs">
+        <button class="shop-tab active" data-shop-tab="buy">Buy</button>
+        <button class="shop-tab" data-shop-tab="sell">Sell</button>
+      </div>
+      <div id="shop-list"></div>
+    </div>
   </div>
 
   <!-- Mobile controls -->
@@ -152,6 +178,8 @@
         <button class="tab" data-tab="quests">Quests</button>
         <button class="tab" data-tab="map">Map</button>
         <button class="tab" data-tab="stats">Stats</button>
+        <button class="tab" data-tab="hearts">Hearts</button>
+        <button class="tab" data-tab="cheevs">Achievements</button>
         <button class="tab" data-tab="system">System</button>
       </div>
       <div class="tab-body" id="tab-inventory"></div>
@@ -166,6 +194,8 @@
         </div>
       </div>
       <div class="tab-body hidden" id="tab-stats"></div>
+      <div class="tab-body hidden" id="tab-hearts"></div>
+      <div class="tab-body hidden" id="tab-cheevs"></div>
       <div class="tab-body hidden" id="tab-system">
         <button id="btn-save">Save</button>
         <button id="btn-load">Load</button>
@@ -198,6 +228,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/main.js?v=13"></script>
+  <script type="module" src="js/main.js?v=14"></script>
 </body>
 </html>

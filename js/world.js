@@ -1,6 +1,6 @@
 // World generation: heightmap terrain, props, sky, day/night.
 import * as THREE from "three";
-import { ZONES } from "./data.js";
+import { ZONES, WEATHERS } from "./data.js";
 
 export const WORLD_SIZE = 600;          // total world span
 export const TERRAIN_SEG = 128;         // grid resolution
@@ -96,7 +96,16 @@ export class World {
     this._scatterProps();
     this._placeShrines();
     this._placeLostPlumbus();
+    this._placeWordWalls();
+
+    // Weather state machine (#28)
+    this.weatherIndex = 0;
+    this.weatherTimer = 60 + Math.random() * 60;       // first transition in 1-2 min
+    this.weatherParticles = [];                        // active rain/snow particle pool
+    this._weatherJustChanged = true;                   // flag for main.js to read
   }
+
+  weatherDef() { return WEATHERS[this.weatherIndex]; }
 
   _buildSky() {
     const geo = new THREE.SphereGeometry(800, 24, 16);
@@ -2150,6 +2159,83 @@ export class World {
     }
   }
 
+  _placeWordWalls() {
+    // Three glowing slabs at zone-edges. Activating one grants a shout slot.
+    this.wordWalls = [];
+    const positions = [
+      { x: 200, z: 90,   word: "MORTY",   color: 0x97ce4c },
+      { x: -180, z: -120, word: "RIGGITY", color: 0x5dffd1 },
+      { x: 100, z: -180, word: "WUBBA",   color: 0xffd166 },
+    ];
+    for (const p of positions) {
+      const y = heightAt(p.x, p.z);
+      const g = new THREE.Group();
+      const slab = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 4, 0.6),
+        new THREE.MeshLambertMaterial({ color: 0x33323a, flatShading: true })
+      );
+      slab.position.y = 2;
+      // Glowing carved word
+      const tex = this._makeTextTexture(p.word, "#000000", `#${p.color.toString(16).padStart(6, "0")}`);
+      const front = new THREE.Mesh(
+        new THREE.PlaneGeometry(3.6, 1.6),
+        new THREE.MeshBasicMaterial({ map: tex, transparent: true })
+      );
+      front.position.set(0, 2.4, 0.31);
+      const torch = new THREE.PointLight(p.color, 1.6, 14, 2);
+      torch.position.y = 3;
+      g.add(slab); g.add(front); g.add(torch);
+      g.position.set(p.x, y, p.z);
+      this.scene.add(g);
+      this.wordWalls.push({ x: p.x, y, z: p.z, mesh: g, word: p.word, color: p.color, activated: false });
+    }
+  }
+
+  // Weather: tick the state machine and update fog / particles.
+  _updateWeather(dt, cameraPos) {
+    this.weatherTimer -= dt;
+    this._weatherJustChanged = false;
+    if (this.weatherTimer <= 0) {
+      this.weatherIndex = (this.weatherIndex + 1 + Math.floor(Math.random() * (WEATHERS.length - 1))) % WEATHERS.length;
+      this.weatherTimer = 90 + Math.random() * 90;       // 1.5-3 min per state
+      this._weatherJustChanged = true;
+    }
+    const w = this.weatherDef();
+    // Fog ramps toward weather target
+    if (this.scene.fog) {
+      this.scene.fog.color.lerp(new THREE.Color(w.fog), Math.min(1, dt * 0.6));
+      this.scene.fog.far += (w.fogFar - this.scene.fog.far) * Math.min(1, dt * 0.4);
+    }
+    // Rain / snow particles around the player
+    if (cameraPos && (w.particles === "acid" || w.particles === "snow" || w.particles === "storm")) {
+      // Spawn a few particles each frame
+      const spawn = w.particles === "snow" ? 3 : 6;
+      for (let i = 0; i < spawn; i++) {
+        const px = cameraPos.x + (Math.random() - 0.5) * 80;
+        const pz = cameraPos.z + (Math.random() - 0.5) * 80;
+        const py = 30 + Math.random() * 8;
+        const isSnow = w.particles === "snow";
+        const color = w.particles === "acid" ? 0x96b070 : w.particles === "storm" ? 0xc89aff : 0xffffff;
+        const m = new THREE.Mesh(
+          new THREE.SphereGeometry(isSnow ? 0.07 : 0.04, 4, 3),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.6 })
+        );
+        m.position.set(px, py, pz);
+        this.scene.add(m);
+        this.weatherParticles.push({ mesh: m, vy: isSnow ? -1.5 : -8, life: 0, ttl: 4 });
+      }
+    }
+    for (let i = this.weatherParticles.length - 1; i >= 0; i--) {
+      const p = this.weatherParticles[i];
+      p.life += dt;
+      p.mesh.position.y += p.vy * dt;
+      if (p.life > p.ttl || p.mesh.position.y < heightAt(p.mesh.position.x, p.mesh.position.z)) {
+        this.scene.remove(p.mesh);
+        this.weatherParticles.splice(i, 1);
+      }
+    }
+  }
+
   _placeLostPlumbus() {
     // Inside cronenberg wastes-ish, eastward
     const x = 200, z = 130;
@@ -2164,6 +2250,8 @@ export class World {
 
   // Day/night cycle update
   update(dt, timeOfDay, cameraPos) {
+    // Weather first (modifies fog, spawns particles)
+    this._updateWeather(dt, cameraPos);
     // timeOfDay: 0..1 (0=midnight, 0.25=sunrise, 0.5=noon, 0.75=sunset)
     const sunAngle = timeOfDay * Math.PI * 2 - Math.PI / 2;
     const sunY = Math.sin(sunAngle);

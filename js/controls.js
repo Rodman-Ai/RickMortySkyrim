@@ -26,7 +26,7 @@ export class Input {
       if (!this.keys.has(k)) this.justPressed.add(k);
       this.keys.add(k);
       // Prevent default for game keys
-      if (["w","a","s","d"," ","tab","escape","e","f","1","2","3","m","q"].includes(k)) {
+      if (["w","a","s","d"," ","tab","escape","e","f","1","2","3","4","5","6","7","8","m","q"].includes(k)) {
         e.preventDefault();
       }
     });
@@ -150,6 +150,55 @@ export class Input {
     }
   }
 
+  // === Gamepad (#84) ===
+  // Polled each frame from poll(). Maps a standard layout:
+  // left stick → move, right stick → look,
+  // A (0)=jump, X (2)=melee, B (1)=ranged, Y (3)=interact,
+  // LB (4)=shout1, LT (6)=shout2, RB (5)=shout3, RT (7)=ranged,
+  // Start (9)=menu, dpad-up/down/left/right (12-15)=hotslot 1-4.
+  _readGamepad(r) {
+    if (!navigator.getGamepads) return;
+    const pads = navigator.getGamepads();
+    let pad = null;
+    for (const p of pads) if (p && p.connected) { pad = p; break; }
+    if (!pad) return;
+    if (!this._padPrev) this._padPrev = { buttons: [], hotslot: -1 };
+    const ax = pad.axes;
+    const dz = (v) => Math.abs(v) < 0.18 ? 0 : v;
+    // Left stick (sticks 0,1) → move
+    const mx = dz(ax[0] || 0);
+    const my = dz(ax[1] || 0);
+    if (mx || my) {
+      r.moveX = mx;
+      r.moveZ = my;
+    }
+    // Right stick (sticks 2,3) → look (delta-style)
+    const lx = dz(ax[2] || 0);
+    const ly = dz(ax[3] || 0);
+    r.lookX += lx * 0.05 * this.sensitivity;
+    r.lookY += ly * 0.05 * this.sensitivity * (this.invertY ? -1 : 1);
+    // Buttons (edge-triggered for "pressed", held for "down")
+    const btn = (i) => pad.buttons[i] && pad.buttons[i].pressed;
+    const justBtn = (i) => btn(i) && !this._padPrev.buttons[i];
+    if (justBtn(0)) r.jump = true;
+    if (justBtn(2)) r.melee = true;
+    if (justBtn(7) || justBtn(5)) r.ranged = true;
+    if (justBtn(3)) r.interact = true;
+    if (justBtn(9)) r.menu = true;
+    if (justBtn(4)) r.shout1 = true;
+    if (justBtn(6)) r.shout2 = true;
+    if (justBtn(8)) r.shout3 = true;     // back/select for shout3 (no triggers free)
+    // Sprint while LB held
+    if (btn(10)) r.sprint = true;
+    // D-pad → hotbar slots 1-4
+    if (justBtn(12)) r.hotbar = 0;
+    if (justBtn(13)) r.hotbar = 1;
+    if (justBtn(14)) r.hotbar = 2;
+    if (justBtn(15)) r.hotbar = 3;
+    // Snapshot button states for next frame
+    this._padPrev.buttons = pad.buttons.map((b) => b && b.pressed);
+  }
+
   // Each frame: returns movement vector (-1..1) and "look delta", consuming mouse/touch deltas.
   poll() {
     const r = {
@@ -166,7 +215,15 @@ export class Input {
       shout3: this.justPressed.has("3") || this.justPressed.has("act:shout3"),
       menu: this.justPressed.has("tab") || this.justPressed.has("escape") || this.justPressed.has("act:menu"),
       map: this.justPressed.has("m"),
+      hotbar: -1,                 // -1 = no slot pressed; gamepad/keys may set 0..4
     };
+    // Hotbar keys 4-8 (avoiding conflict with shout keys 1-3)
+    const HOTBAR_KEYS = ["4", "5", "6", "7", "8"];
+    for (let i = 0; i < HOTBAR_KEYS.length; i++) {
+      if (this.justPressed.has(HOTBAR_KEYS[i])) r.hotbar = i;
+    }
+    // Gamepad layer (overlays r if a pad is connected)
+    this._readGamepad(r);
     this.mouse.dx = 0; this.mouse.dy = 0;
     // WASD
     if (this.keys.has("w")) r.moveZ -= 1;
